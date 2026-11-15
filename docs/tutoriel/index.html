@@ -1,0 +1,357 @@
+<title>Prise en main TontApp</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a field guide. One column of reading width; each journey is a "scene" pairing the
+   recording with its numbered steps, phone recordings in a device frame, web ones full width. */
+:root {
+  --bg: #f6f7f3;          /* paper with a faint green bias */
+  --surface: #ffffff;
+  --ink: #17221a;
+  --muted: #5d6b60;
+  --line: #dde3da;
+  --green: #1b5e20;       /* the app's own brand green */
+  --green-soft: #e3efe2;
+  --ochre: #b8661c;       /* market-cloth ochre, used sparingly */
+  --ochre-soft: #f7e8d8;
+  --code-bg: #eef1ea;
+  --ok: #1f7a34; --warn: #a15c00; --bad: #b42318; --info: #3b5b8c;
+  --display: "Bricolage Grotesque", "Space Grotesk", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101612; --surface: #172019; --ink: #e7eee6; --muted: #9fb0a2; --line: #2a362d;
+    --green: #7fcf86; --green-soft: #1d2f20; --ochre: #e7a35e; --ochre-soft: #33261a; --code-bg: #1c261f;
+    --ok: #6fd28a; --warn: #f0b45a; --bad: #ff8a7a; --info: #9cb8e6; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101612; --surface: #172019; --ink: #e7eee6; --muted: #9fb0a2; --line: #2a362d;
+  --green: #7fcf86; --green-soft: #1d2f20; --ochre: #e7a35e; --ochre-soft: #33261a; --code-bg: #1c261f;
+  --ok: #6fd28a; --warn: #f0b45a; --bad: #ff8a7a; --info: #9cb8e6; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 16px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding-block: 40px 80px; display: grid; gap: 64px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.12; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; }
+h3 { font-size: 1.15rem; font-weight: 600; }
+p { margin: 0; max-width: 65ch; }
+a { color: var(--green); }
+.eyebrow { font: 600 0.78rem/1 var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ochre); }
+.muted { color: var(--muted); }
+code, kbd { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+
+/* Hero */
+.hero { display: grid; gap: 20px; padding-top: 12px; }
+.hero p.lead { font-size: 1.15rem; color: var(--muted); }
+.principle {
+  display: flex; gap: 14px; align-items: flex-start; background: var(--green-soft);
+  border-radius: 10px; padding: 16px 18px; max-width: 760px;
+}
+.principle strong { font-family: var(--display); }
+.coin { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--green); color: var(--bg);
+  display: grid; place-items: center; font: 800 0.95rem var(--display); }
+
+/* Roles */
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.role { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 8px; align-content: start; }
+.role .where { font: 600 0.75rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+/* Setup */
+.section { display: grid; gap: 20px; }
+.cmds { display: grid; gap: 10px; }
+.cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.cmd pre { margin: 0; font: 0.9rem/1.5 var(--mono); overflow-x: auto; white-space: pre; }
+.cmd .why { grid-column: 1 / -1; font-size: 0.88rem; color: var(--muted); }
+.copy { font: 600 0.78rem var(--body); border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.copy:hover { border-color: var(--green); color: var(--green); }
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.93rem; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 0.75rem var(--body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.note { border-left: 3px solid var(--ochre); background: var(--ochre-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 760px; }
+
+/* Journey timeline */
+.journey-head { display: grid; gap: 10px; }
+.scenes { display: grid; gap: 56px; counter-reset: scene; }
+.scene { display: grid; gap: 24px; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); align-items: start;
+  padding-top: 28px; border-top: 1px solid var(--line); }
+.scene.wide { grid-template-columns: minmax(0, 1fr); }
+.scene-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.step-no { font: 800 0.95rem var(--display); color: var(--bg); background: var(--green); border-radius: 6px; padding: 2px 9px; }
+.chip { font: 600 0.75rem var(--body); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.chip.phone { color: var(--green); border-color: var(--green); }
+.chip.web { color: var(--ochre); border-color: var(--ochre); }
+.device { background: #0d120e; border-radius: 30px; padding: 10px; max-width: 300px; width: 100%;
+  box-shadow: 0 18px 40px -22px rgba(0,0,0,.55); }
+.device video { display: block; width: 100%; aspect-ratio: 9 / 20; border-radius: 22px; background: #000; }
+.browser { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); max-width: 100%; }
+.browser .bar { display: flex; gap: 6px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.browser .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: block; }
+.browser .bar span { margin-left: 8px; font: 0.8rem var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser video { display: block; width: 100%; aspect-ratio: 1280 / 760; background: #000; }
+.scene-text { display: grid; gap: 14px; min-width: 0; }
+ol.steps { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 65ch; }
+ol.steps li::marker { font-family: var(--display); font-weight: 600; color: var(--green); }
+.keep { font-size: 0.93rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; max-width: 65ch; }
+.keep b { color: var(--green); }
+.wide .scene-text { order: -1; }
+
+/* Statuses */
+.statuses { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.st { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; align-items: baseline;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; }
+.pill { font: 600 0.72rem var(--mono); padding: 2px 8px; border-radius: 999px; }
+.p-ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.p-warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.p-bad { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+.p-info { background: color-mix(in srgb, var(--info) 16%, transparent); color: var(--info); }
+.p-mute { background: var(--code-bg); color: var(--muted); }
+
+.faq { display: grid; gap: 10px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+summary { cursor: pointer; font-weight: 600; }
+details p, details ul { margin-top: 8px; color: var(--muted); }
+footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--line); padding-top: 18px; }
+
+@media (max-width: 720px) {
+  .scene { grid-template-columns: minmax(0, 1fr); }
+  .device { margin: 0 auto; max-width: 260px; }
+  .scene-text { order: -1; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">Guide de prise en main · version de démonstration</span>
+    <h1>Prise en main TontApp</h1>
+    <p class="lead">Gérer une tontine de bout en bout : invitations, tours, encaissement des cotisations en espèces et journal d'audit. Chaque parcours a été filmé en conditions réelles, sur un téléphone Android et dans le navigateur.</p>
+    <div class="principle">
+      <span class="coin" aria-hidden="true">F</span>
+      <p><strong>L'argent reste hors de l'application.</strong> Les membres remettent leur cotisation au gestionnaire (espèces ou banque). TontApp tient le registre : le gestionnaire saisit le paiement, le valide après avoir vérifié la preuve, et chaque action est inscrite dans un journal infalsifiable.</p>
+    </div>
+  </header>
+
+  <section class="section" aria-labelledby="roles-h">
+    <h2 id="roles-h">Qui fait quoi</h2>
+    <div class="roles">
+      <div class="role">
+        <span class="where">Mobile + web</span>
+        <h3>Gestionnaire</h3>
+        <p class="muted">Crée la tontine, invite les membres par code, l'active, gère les tours, relance les retardataires. Sur le web, il encaisse et valide les cotisations.</p>
+      </div>
+      <div class="role">
+        <span class="where">Mobile</span>
+        <h3>Membre</h3>
+        <p class="muted">S'inscrit avec son numéro (code OTP), rejoint une tontine avec un code d'invitation, suit le tour en cours et l'historique de ses versements.</p>
+      </div>
+      <div class="role">
+        <span class="where">Web</span>
+        <h3>Administrateur</h3>
+        <p class="muted">Supervise la plateforme : métriques de la semaine, liste de toutes les tontines, alertes (chaîne d'audit rompue, tours en retard, SMS en échec).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="setup-h">
+    <h2 id="setup-h">Démarrer en local</h2>
+    <p class="muted">Prérequis : Docker, le SDK .NET 10 (installé dans <code>~/.dotnet</code>), Node 20+, et pour le mobile le SDK Android avec un téléphone branché en USB (débogage USB activé). Toutes les commandes se lancent à la racine du dépôt.</p>
+    <div class="cmds">
+      <div class="cmd"><pre>make up</pre><button class="copy" type="button" data-copy="make up">Copier</button><span class="why">Démarre PostgreSQL (port 5433) et Redis (port 6380).</span></div>
+      <div class="cmd"><pre>make api</pre><button class="copy" type="button" data-copy="make api">Copier</button><span class="why">Lance l'API sur http://localhost:5243 et applique les migrations. Laisser ce terminal ouvert.</span></div>
+      <div class="cmd"><pre>make seed</pre><button class="copy" type="button" data-copy="make seed">Copier</button><span class="why">Crée les comptes de démonstration et la « Tontine du Marche » (3 membres, en brouillon).</span></div>
+      <div class="cmd"><pre>make dashboard</pre><button class="copy" type="button" data-copy="make dashboard">Copier</button><span class="why">Lance le tableau de bord web sur http://localhost:3000.</span></div>
+      <div class="cmd"><pre>make mobile</pre><button class="copy" type="button" data-copy="make mobile">Copier</button><span class="why">Redirige les ports du téléphone (adb reverse) et lance Metro pour l'application Android.</span></div>
+      <div class="cmd"><pre>make otp TEL=+22670000010</pre><button class="copy" type="button" data-copy="make otp TEL=+22670000010">Copier</button><span class="why">En développement, les SMS sont simulés : cette commande affiche le code OTP envoyé à un numéro.</span></div>
+      <div class="cmd"><pre>make reset</pre><button class="copy" type="button" data-copy="make reset">Copier</button><span class="why">Efface toutes les données de développement pour repartir de zéro (arrêter l'API avant).</span></div>
+    </div>
+
+    <h3>Comptes de démonstration</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Rôle</th><th>Nom</th><th>Téléphone</th><th>Mot de passe</th></tr></thead>
+        <tbody>
+          <tr><td>Administrateur</td><td>Admin TontApp</td><td class="num">+22670000001</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Gestionnaire</td><td>Awa Traore</td><td class="num">+22670000002</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Membre (bénéficiaire du tour 1)</td><td>Ibrahim Sawadogo</td><td class="num">+22670000003</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Membre</td><td>Mariam Kabore</td><td class="num">+22670000004</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Membre</td><td>Seydou Ouedraogo</td><td class="num">+22670000005</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Membre créée dans le tutoriel</td><td>Fatou Diallo</td><td class="num">+22670000010</td><td class="num">Demo2026!</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Dans l'application, le champ téléphone est pré-rempli avec <code>+226</code> : il suffit de taper les 8 chiffres restants. Les numéros sont fictifs ; en développement, aucun SMS réel n'est envoyé.</p>
+  </section>
+
+  <section class="section" aria-labelledby="journey-h">
+    <div class="journey-head">
+      <span class="eyebrow">Un cycle complet, dans l'ordre</span>
+      <h2 id="journey-h">Le parcours en six scènes</h2>
+      <p class="muted">Les scènes s'enchaînent : chacune part de l'état laissé par la précédente. Les points blancs sur les vidéos du téléphone montrent chaque toucher ; sur le web, le cercle rouge suit la souris.</p>
+    </div>
+
+    <div class="scenes">
+
+      <article class="scene" id="scene-1">
+        <div class="device"><video src="videos/m1.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : la gestionnaire se connecte et génère un code d'invitation"></video></div>
+        <div class="scene-text">
+          <div class="scene-meta"><span class="step-no">1</span><span class="chip phone">Téléphone</span><span class="chip">Gestionnaire · 1 min 45</span></div>
+          <h3>Se connecter et inviter des membres</h3>
+          <ol class="steps">
+            <li>Parcourir les trois écrans de présentation, puis <b>Commencer</b>.</li>
+            <li>Se connecter avec le compte d'Awa (<code>70000002</code>, <code>Demo2026!</code>).</li>
+            <li>Ouvrir <b>Tontine du Marche</b> : statut <i>Draft</i>, 3 membres, cotisation de 10 000 FCFA par mois.</li>
+            <li><b>Inviter des membres</b>, puis <b>Générer un code d'invitation</b>. Le code à 6 caractères est valable 7 jours et peut être partagé via WhatsApp.</li>
+            <li>Se déconnecter depuis <b>Profil</b>.</li>
+          </ol>
+          <p class="keep"><b>À retenir :</b> on ne peut rejoindre une tontine que tant qu'elle est en brouillon. Générez les codes avant l'activation.</p>
+        </div>
+      </article>
+
+      <article class="scene" id="scene-2">
+        <div class="device"><video src="videos/m2.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : un nouveau membre s'inscrit, valide son code OTP et rejoint la tontine"></video></div>
+        <div class="scene-text">
+          <div class="scene-meta"><span class="step-no">2</span><span class="chip phone">Téléphone</span><span class="chip">Nouveau membre · 2 min 10</span></div>
+          <h3>S'inscrire et rejoindre la tontine</h3>
+          <ol class="steps">
+            <li><b>Créer un compte</b> : nom, numéro, mot de passe (8 caractères minimum, une majuscule, un chiffre).</li>
+            <li>Saisir le code OTP à 6 chiffres reçu par SMS (en développement : <code>make otp TEL=…</code>), puis <b>Vérifier</b>.</li>
+            <li>Sur l'accueil vide, toucher l'icône <b>Rejoindre une tontine</b> (poignée de main).</li>
+            <li>Entrer le code d'invitation de la scène 1 ; le nom affiché dans le groupe est pré-rempli.</li>
+            <li>Fatou apparaît dans la tontine, qui compte maintenant 4 membres.</li>
+          </ol>
+          <p class="keep"><b>À retenir :</b> le compte est rattaché au numéro de téléphone. Un même numéro ne peut rejoindre une tontine qu'une seule fois.</p>
+        </div>
+      </article>
+
+      <article class="scene" id="scene-3">
+        <div class="device"><video src="videos/m3.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : la gestionnaire active la tontine, ouvre la gestion du tour et relance les retardataires par SMS"></video></div>
+        <div class="scene-text">
+          <div class="scene-meta"><span class="step-no">3</span><span class="chip phone">Téléphone</span><span class="chip">Gestionnaire · 1 min 46</span></div>
+          <h3>Activer la tontine et gérer le tour</h3>
+          <ol class="steps">
+            <li>Se reconnecter en tant qu'Awa et ouvrir la tontine.</li>
+            <li><b>Activer la tontine</b> puis confirmer. Il faut au moins 3 membres. Les inscriptions sont fermées et le <b>tour n°1</b> s'ouvre avec Ibrahim comme bénéficiaire (ordre d'inscription).</li>
+            <li>Le détail affiche la progression des paiements et le compte à rebours jusqu'à la fin du tour (30 jours pour une tontine mensuelle).</li>
+            <li><b>Gérer le tour</b> : la liste des retardataires exclut le bénéficiaire, qui reçoit et ne cotise pas.</li>
+            <li><b>Tout sélectionner</b> puis <b>Relancer par SMS</b> : un rappel est planifié pour chaque membre.</li>
+          </ol>
+          <p class="keep"><b>À retenir :</b> un membre qui a désactivé les SMS de rappel dans son profil ne reçoit pas de relance. Les confirmations de paiement, elles, lui sont toujours envoyées.</p>
+        </div>
+      </article>
+
+      <article class="scene wide" id="scene-4">
+        <div class="scene-text">
+          <div class="scene-meta"><span class="step-no">4</span><span class="chip web">Navigateur</span><span class="chip">Gestionnaire · 1 min 04</span></div>
+          <h3>Encaisser, valider et vérifier l'audit</h3>
+          <ol class="steps">
+            <li>Se connecter sur <code>http://localhost:3000</code> avec le compte d'Awa. Le tableau de bord montre le tour en cours et les membres.</li>
+            <li><b>Paiements</b> : choisir le membre, vérifier le montant, saisir la référence du reçu, puis <b>Enregistrer</b>. Le paiement est créé <i>en attente</i>.</li>
+            <li>Après vérification de la preuve, <b>Valider</b> : il passe à <i>confirme</i> avec une référence <code>CASH-…</code>.</li>
+            <li>Si la preuve ne convient pas, <b>Rejeter</b> avec un motif (obligatoire). Le membre redevient « à payer ».</li>
+            <li><b>Audit Trail</b> : chaque action (création, saisie, validation, rejet) avec son auteur. Le bandeau vert confirme que la chaîne SHA-256 est intacte.</li>
+          </ol>
+        </div>
+        <div class="browser"><div class="bar"><i></i><i></i><i></i><span>localhost:3000/gestionnaire/paiements</span></div>
+          <video src="videos/web-gestionnaire.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : encaissement en espèces, validation, rejet et journal d'audit sur le tableau de bord"></video></div>
+      </article>
+
+      <article class="scene" id="scene-5">
+        <div class="device"><video src="videos/m4.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : le membre voit son paiement confirmé dans l'application"></video></div>
+        <div class="scene-text">
+          <div class="scene-meta"><span class="step-no">5</span><span class="chip phone">Téléphone</span><span class="chip">Membre · 56 s</span></div>
+          <h3>Le membre voit son paiement confirmé</h3>
+          <ol class="steps">
+            <li>Fatou se connecte : le tour n°1 indique 1 paiement sur 3 et son badge est passé à <i>Payé</i>.</li>
+            <li><b>Payer ma cotisation</b> rappelle la marche à suivre : remettre le montant au gestionnaire, qui l'enregistre puis le valide.</li>
+            <li><b>Voir mon historique</b> : le versement de 10 000 FCFA, sa référence et la date de confirmation.</li>
+          </ol>
+          <p class="keep"><b>À retenir :</b> le membre ne déclare rien lui-même. Seul ce que le gestionnaire a validé apparaît comme confirmé.</p>
+        </div>
+      </article>
+
+      <article class="scene wide" id="scene-6">
+        <div class="scene-text">
+          <div class="scene-meta"><span class="step-no">6</span><span class="chip web">Navigateur</span><span class="chip">Administrateur · 31 s</span></div>
+          <h3>Superviser la plateforme</h3>
+          <ol class="steps">
+            <li>Se connecter avec le compte administrateur, puis ouvrir <b>Vue d'ensemble</b> : tontines actives, membres inscrits, volume confirmé de la semaine et SMS envoyés.</li>
+            <li><b>Tontines</b> : toutes les tontines de la plateforme avec statut, membres, cotisation et périodicité.</li>
+            <li><b>Alertes</b> : chaîne d'audit rompue (critique), tour dont l'échéance est dépassée, SMS en échec.</li>
+          </ol>
+        </div>
+        <div class="browser"><div class="bar"><i></i><i></i><i></i><span>localhost:3000/admin</span></div>
+          <video src="videos/web-admin.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : métriques, liste des tontines et alertes dans l'espace administrateur"></video></div>
+      </article>
+
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="status-h">
+    <h2 id="status-h">Statut d'un membre dans le tour en cours</h2>
+    <div class="statuses">
+      <div class="st"><span class="pill p-ok">paye</span><span>Un paiement a été validé pour ce tour.</span></div>
+      <div class="st"><span class="pill p-warn">en_attente</span><span>Un paiement est saisi mais pas encore validé.</span></div>
+      <div class="st"><span class="pill p-mute">a_payer</span><span>Rien n'est saisi, l'échéance n'est pas dépassée.</span></div>
+      <div class="st"><span class="pill p-bad">en_retard</span><span>Rien n'est validé et l'échéance du tour est passée.</span></div>
+      <div class="st"><span class="pill p-info">beneficiaire</span><span>Reçoit la cagnotte de ce tour, ne cotise pas.</span></div>
+      <div class="st"><span class="pill p-mute">suspendu</span><span>Écarté par le gestionnaire, n'est plus compté.</span></div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="faq-h">
+    <h2 id="faq-h">Questions fréquentes</h2>
+    <div class="faq">
+      <details><summary>Le téléphone affiche « Erreur réseau » ou « Erreur serveur (504) »</summary>
+        <p>Vérifiez que l'API tourne (<code>make api</code>) et que les ports sont redirigés : <code>adb reverse tcp:5243 tcp:5243</code>. La redirection se perd quand le câble USB est rebranché. L'application contourne désormais le proxy imposé par certains opérateurs (APN Orange) pour les adresses locales, ce qui provoquait l'erreur 504 en données mobiles.</p></details>
+      <details><summary>Je ne reçois pas le code OTP</summary>
+        <p>En développement, un faux fournisseur SMS écrit les messages dans les logs de l'API. Utilisez <code>make otp TEL=+226XXXXXXXX</code> pour afficher le code en cours (valable 5 minutes).</p></details>
+      <details><summary>Comment donner le rôle de gestionnaire à un compte ?</summary>
+        <p>Un compte qui s'inscrit est <i>Membre</i>. Pour le moment, le rôle se change avec <code>scripts/demo.sh role +226XXXXXXXX Gestionnaire</code>. Un écran d'administration est prévu.</p></details>
+      <details><summary>Le paiement Mobile Money n'apparaît pas</summary>
+        <p>Il est désactivé par défaut (<code>Features:MobileMoney</code> à <code>false</code>), puisque dans le modèle retenu l'argent reste hors de l'application. Il pourra être réactivé plus tard.</p></details>
+      <details><summary>Limites connues de cette version</summary>
+        <ul>
+          <li>Pas encore de paiement partiel ni de « reste dû » (prévu en phase 2, avec le volet Projet collectif).</li>
+          <li>La validation est faite par le gestionnaire ; un rôle Trésorier distinct est prévu en phase 1.</li>
+          <li>La carte « Paiements confirmés » du tableau de bord web compte aussi le bénéficiaire (« sur 4 » au lieu de « sur 3 » côté mobile).</li>
+          <li>Deux paiements saisis exactement au même instant sur une même tontine pourraient créer une bifurcation dans la chaîne d'audit (verrou prévu avec le registre commun).</li>
+        </ul></details>
+    </div>
+  </section>
+
+  <footer>Enregistré le 15 novembre 2026 sur un Redmi (Android 15) et dans Chromium, avec l'environnement de développement local et les données de démonstration ci-dessus.</footer>
+</div>
+
+<script>
+document.querySelectorAll('.copy').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var text = btn.getAttribute('data-copy');
+    var done = function () { btn.textContent = 'Copié'; setTimeout(function () { btn.textContent = 'Copier'; }, 1500); };
+    try {
+      navigator.clipboard.writeText(text).then(done, function () { select(btn); });
+    } catch (e) { select(btn); }
+  });
+});
+function select(btn) {
+  var pre = btn.parentElement.querySelector('pre');
+  var r = document.createRange(); r.selectNodeContents(pre);
+  var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  btn.textContent = 'Sélectionné';
+}
+</script>
