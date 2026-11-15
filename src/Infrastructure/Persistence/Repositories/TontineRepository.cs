@@ -96,6 +96,7 @@ internal sealed class TontineRepository : ITontineRepository
         return await _dbContext.Tontines
             .AsNoTracking()
             .Include(MembersNavigation)
+            .Include(RoundsNavigation)
             .Where(t => t.Members.Any(m => m.UtilisateurId == utilisateurId))
             .ToListAsync(cancellationToken);
     }

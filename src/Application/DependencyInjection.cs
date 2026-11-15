@@ -1,6 +1,7 @@
 namespace Application;
 
 using Application.Common.Behaviors;
+using Application.Dashboard;
 using Application.TontineManagement.Services;
 using FluentValidation;
 using MediatR;
@@ -21,6 +22,7 @@ public static class DependencyInjection
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
         services.AddScoped<ITontineAccessService, TontineAccessService>();
+        services.AddScoped<IDashboardReadService, DashboardReadService>();
 
         return services;
     }
