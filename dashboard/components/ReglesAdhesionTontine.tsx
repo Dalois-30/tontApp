@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Card } from "./ui";
 
 type Mode = "Interdite" | "AvecValidation" | "Libre";
 
@@ -33,37 +34,30 @@ export default function ReglesAdhesionTontine({ tontineId, mode, rattrapage }: P
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 border border-gray-200 space-y-4" data-testid="regles-tontine">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">Règles d&apos;adhésion en cours de cycle</h2>
-        <p className="text-sm text-gray-500">S&apos;appliquent aux personnes qui rejoignent après l&apos;activation. Les membres déjà acceptés gardent leurs conditions.</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-        <label htmlFor="t-mode" className="block">
-          <span className="font-medium text-gray-900">Adhésion après le démarrage</span>
-          <select id="t-mode" value={m} onChange={(e) => setM(e.target.value as Mode)}
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+    <Card title="Règles d'adhésion en cours de cycle" id="regles-tontine"
+      subtitle="Pour les personnes qui rejoignent après l'activation. Les membres déjà acceptés gardent leurs conditions.">
+      <div data-testid="regles-tontine" className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label htmlFor="t-mode" className="label">Adhésion après le démarrage</label>
+          <select id="t-mode" value={m} onChange={(e) => setM(e.target.value as Mode)} className="input">
             <option value="AvecValidation">Possible, avec validation du gestionnaire</option>
             <option value="Libre">Possible, sans validation</option>
             <option value="Interdite">Interdite</option>
           </select>
-        </label>
+        </div>
         <label htmlFor="t-rattrapage" className="flex gap-3 items-start cursor-pointer md:pt-6">
           <input id="t-rattrapage" type="checkbox" checked={r} disabled={m === "Interdite"} onChange={(e) => setR(e.target.checked)}
-            className="mt-1 h-4 w-4 accent-green-700" />
+            className="mt-0.5 h-4 w-4 accent-[rgb(var(--brand))]" />
           <span>
-            <span className="font-medium text-gray-900">Rattrapage des tours passés</span>
-            <span className="block text-gray-500">Le nouveau membre doit les cotisations des tours ouverts avant son arrivée.</span>
+            <span className="font-medium text-ink">Rattrapage des tours passés</span>
+            <span className="block text-[12.5px] text-ink-2">Le nouveau membre doit les cotisations des tours ouverts avant son arrivée.</span>
           </span>
         </label>
       </div>
-      <div className="flex items-center gap-3">
-        <button disabled={!modifie} onClick={enregistrer}
-          className="bg-green-700 hover:bg-green-800 disabled:opacity-40 text-white text-sm font-medium rounded-md px-4 py-2">
-          Enregistrer
-        </button>
-        {etat && <span className={`text-sm ${etat.ok ? "text-green-700" : "text-red-700"}`}>{etat.text}</span>}
+      <div className="flex items-center gap-3 mt-5">
+        <button disabled={!modifie} onClick={enregistrer} className="btn-primary">Enregistrer</button>
+        {etat && <span className={`text-[13px] ${etat.ok ? "text-good" : "text-bad"}`}>{etat.text}</span>}
       </div>
-    </div>
+    </Card>
   );
 }

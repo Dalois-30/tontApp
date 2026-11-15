@@ -1,122 +1,100 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMontant, libelleAction } from "@/lib/format";
 import type { AuditEntriesResult, AuditEntryDto } from "@/lib/types";
+import { Card, EmptyState, Icon, PageHeader } from "@/components/ui";
 import Pagination from "@/components/Pagination";
+
+const TON: Record<string, string> = {
+  VersementConfirme: "bg-good-soft text-good", VersementRejete: "bg-bad-soft text-bad",
+  VersementManuel: "bg-warn-soft text-warn", VersementCree: "bg-surface-2 text-ink-2",
+};
+const ICONE: Record<string, string> = { VersementConfirme: "check", VersementRejete: "x", VersementManuel: "receipt", VersementCree: "plus" };
+
+function detail(e: AuditEntryDto): string | null {
+  try {
+    const p = JSON.parse(e.payload) as Record<string, unknown>;
+    if (p.DescriptionPreuve) return `Preuve : ${p.DescriptionPreuve}`;
+    if (p.ReferenceExterne) return `Référence ${p.ReferenceExterne}`;
+    if (p.Raison) return `Motif : ${p.Raison}`;
+    if (typeof p.Montant === "number") return formatMontant(p.Montant);
+  } catch { /* payload is free text */ }
+  return null;
+}
 
 export default function AuditTrailPage() {
   const [entries, setEntries] = useState<AuditEntryDto[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [chaineValide, setChaineValide] = useState<boolean | null>(null);
-  const pageSize = 20;
 
   const fetchAudit = useCallback(async (p: number) => {
     setLoading(true);
     try {
-      const res = await fetch(
-        `/api/audit?page=${p}&pageSize=${pageSize}`
-      );
+      const res = await fetch(`/api/audit?page=${p}&pageSize=20`);
       if (res.ok) {
         const data: AuditEntriesResult = await res.json();
         setEntries(data.entries);
         setChaineValide(data.chaineValide ?? null);
         setTotalPages(data.totalPages);
+        setTotal(data.totalCount);
       }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchAudit(page);
-  }, [page, fetchAudit]);
+  useEffect(() => { fetchAudit(page); }, [page, fetchAudit]);
 
   return (
-    <div className="max-w-6xl space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Audit Trail</h1>
+    <>
+      <PageHeader eyebrow="Tontine" title="Journal d'audit"
+        subtitle="Chaque action sur les paiements est inscrite ici, avec son auteur. Les entrées sont chaînées par empreinte SHA-256 : modifier ou supprimer une ligne casse la chaîne." />
+
       {chaineValide !== null && (
-        <div
-          data-testid="chaine"
-          className={`px-4 py-3 rounded-md text-sm border ${
-            chaineValide
-              ? "bg-green-50 border-green-200 text-green-800"
-              : "bg-red-50 border-red-200 text-red-800"
-          }`}
-        >
-          {chaineValide
-            ? "✔ Chaîne d'audit intègre : aucune entrée n'a été modifiée."
-            : "✖ Chaîne d'audit rompue : au moins une entrée a été altérée."}
+        <div data-testid="chaine" className={`card p-5 flex items-start gap-4 ${chaineValide ? "border-good/30" : "border-bad/40"}`}>
+          <span className={`h-10 w-10 shrink-0 rounded-full grid place-items-center ${chaineValide ? "bg-good-soft text-good" : "bg-bad-soft text-bad"}`}>
+            <Icon name={chaineValide ? "shield" : "alert"} className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="font-semibold text-ink">{chaineValide ? "Chaîne intègre" : "Chaîne rompue"}</p>
+            <p className="text-ink-2 text-[13.5px]">
+              {chaineValide
+                ? `Les ${total} entrées ont été recalculées à l'instant : aucune n'a été modifiée.`
+                : "Au moins une entrée a été modifiée ou supprimée après coup. Contactez l'administrateur."}
+            </p>
+          </div>
         </div>
       )}
-      <p className="text-sm text-gray-500">
-        Historique immuable de toutes les actions sur votre tontine (chaîne
-        SHA-256).
-      </p>
 
-      <div className="bg-white rounded-lg shadow border border-gray-200">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Action
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Acteur
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Hash
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-400">
-                    Chargement...
-                  </td>
-                </tr>
-              ) : entries.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-400">
-                    Aucune entrée d&apos;audit.
-                  </td>
-                </tr>
-              ) : (
-                entries.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(entry.timestamp)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {entry.action}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {entry.acteurNom ?? entry.acteurId.slice(0, 8)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-400">
-                      {entry.hash.slice(0, 16)}…
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-6 border-t border-gray-200">
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
-        </div>
-      </div>
-    </div>
+      <Card title="Chronologie" subtitle="Du plus récent au plus ancien." bodyClassName="pt-2">
+        {loading ? (
+          <p className="text-muted px-6 py-8">Chargement…</p>
+        ) : entries.length === 0 ? (
+          <EmptyState icon="shield" title="Aucune entrée pour le moment">Les paiements saisis et validés apparaîtront ici.</EmptyState>
+        ) : (
+          <ol className="divide-y divide-line">
+            {entries.map((e) => (
+              <li key={e.id} className="flex items-start gap-4 px-5 md:px-6 py-3.5">
+                <span className={`mt-0.5 h-8 w-8 shrink-0 rounded-full grid place-items-center ${TON[e.action] ?? "bg-surface-2 text-ink-2"}`}>
+                  <Icon name={ICONE[e.action] ?? "list"} className="h-4 w-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-ink"><span className="font-medium">{libelleAction(e.action)}</span>
+                    <span className="text-ink-2"> · {e.acteurNom ?? (e.acteurId === "system" ? "Système" : "Utilisateur")}</span></p>
+                  {detail(e) && <p className="text-[12.5px] text-ink-2">{detail(e)}</p>}
+                  <p className="text-[12px] text-muted font-mono truncate" title={e.hash}>empreinte {e.hash.slice(0, 20)}…</p>
+                </div>
+                <time className="text-[12.5px] text-muted whitespace-nowrap">{formatDate(e.timestamp)}</time>
+              </li>
+            ))}
+          </ol>
+        )}
+        <div className="px-5 md:px-6 border-t border-line"><Pagination page={page} totalPages={totalPages} onPageChange={setPage} /></div>
+      </Card>
+    </>
   );
 }

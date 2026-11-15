@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { decodeJwt } from "jose";
 
 const API_BASE_URL = process.env.API_URL ?? "http://localhost:8080";
 
@@ -20,7 +21,10 @@ export async function POST(request: NextRequest) {
     const data = await apiRes.json();
 
     // Set HTTP-only secure cookie with the JWT
-    const response = NextResponse.json({ success: true });
+    // Role (display only) so the page can open the right space.
+    const claims = decodeJwt(data.accessToken) as Record<string, unknown>;
+    const role = claims["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] ?? null;
+    const response = NextResponse.json({ success: true, role });
     response.cookies.set("accessToken", data.accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

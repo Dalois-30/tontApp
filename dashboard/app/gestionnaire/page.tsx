@@ -1,269 +1,168 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { apiFetch } from "@/lib/api";
-import { formatMontant, maskMontant } from "@/lib/format";
-import type { TontineDto, VersementDto } from "@/lib/types";
-import StatCard from "@/components/StatCard";
-import StatusBadge from "@/components/StatusBadge";
+import { formatMontant, formatDate, libellePeriodicite, libelleStatutGroupe } from "@/lib/format";
+import type { MembreDto, TontineDto, VersementDto } from "@/lib/types";
+import { Badge, Card, EmptyState, Icon, PageHeader, SegmentedBar, Stat } from "@/components/ui";
 import RelancerButton from "@/components/RelancerButton";
 import AdhesionsEnAttente from "@/components/AdhesionsEnAttente";
 import ReglesAdhesionTontine from "@/components/ReglesAdhesionTontine";
+import RoundsChart, { type RoundPoint } from "@/components/charts/RoundsChart";
 
-async function getTontine(token: string): Promise<TontineDto | null> {
-  try {
-    // In a real app, the gestionnaire's tontine ID would come from their profile.
-    // For now, we fetch from a dedicated endpoint.
-    return await apiFetch<TontineDto>("/api/v1/dashboard/gestionnaire/tontine", {
-      token,
-    });
-  } catch {
-    return null;
-  }
+async function charger(token: string) {
+  const tontine = await apiFetch<TontineDto>("/api/v1/dashboard/gestionnaire/tontine", { token }).catch(() => null);
+  if (!tontine) return { tontine: null, versements: [] as VersementDto[] };
+  const page = await apiFetch<{ items: VersementDto[] }>(`/api/v1/tontines/${tontine.id}/versements?page=1&pageSize=100`, { token })
+    .catch(() => ({ items: [] as VersementDto[] }));
+  return { tontine, versements: page.items ?? [] };
 }
 
-async function getRecentPayments(
-  token: string,
-  tontineId: string
-): Promise<VersementDto[]> {
-  try {
-    const result = await apiFetch<{ items: VersementDto[] }>(
-      `/api/v1/tontines/${tontineId}/versements?page=1&pageSize=10`,
-      { token }
-    );
-    return result.items ?? [];
-  } catch {
-    return [];
-  }
-}
+const ordreStatut: Record<string, number> = { en_retard: 0, a_payer: 1, en_attente: 2, paye: 3, beneficiaire: 4, suspendu: 5 };
 
-export default async function DashboardGestionnairePage() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("accessToken")?.value ?? "";
-
-  const tontine = await getTontine(token);
+export default async function TableauDeBordTontine() {
+  const token = (await cookies()).get("accessToken")?.value ?? "";
+  const { tontine, versements } = await charger(token);
 
   if (!tontine) {
     return (
-      <div className="max-w-4xl">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">
-          Tableau de bord Gestionnaire
-        </h1>
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md">
-          Aucune tontine trouvée. Créez votre première tontine via
-          l&apos;application mobile.
-        </div>
-      </div>
+      <>
+        <PageHeader eyebrow="Tontine" title="Aucune tontine pour le moment" />
+        <div className="card"><EmptyState icon="users" title="Créez votre tontine depuis l'application mobile">
+          Une fois créée, elle apparaît ici avec ses tours, ses membres et ses paiements.
+        </EmptyState></div>
+      </>
     );
   }
 
-  const payments = await getRecentPayments(token, tontine.id);
-
-  const membresEnRetard = tontine.membres.filter(
-    (m) => m.statut === "en_retard"
-  );
-  const membresPaye = tontine.membres.filter(
-    (m) => m.statut === "paye" || m.statut === "confirme"
-  );
-  const tourActuel = tontine.tours.find((t) => t.status === "Ouvert");
-  const membresActifs = tontine.membres.filter((m) => m.statut !== "adhesion_en_attente");
-  // Contributors of the current round: the beneficiary and suspended members do not pay.
-  const payeurs = membresActifs.filter(
-    (m) => m.statut !== "beneficiaire" && m.statut !== "suspendu"
-  );
+  const membres = tontine.membres.filter((m) => m.statut !== "adhesion_en_attente");
   const demandes = tontine.membres.filter((m) => m.statut === "adhesion_en_attente");
-  const arrieres = membresActifs.filter((m) => (m.resteDu ?? 0) > 0);
+  const tour = tontine.tours.find((t) => t.status === "Ouvert");
+  const payeurs = membres.filter((m) => m.statut !== "beneficiaire" && m.statut !== "suspendu");
+  const compte = (s: string) => payeurs.filter((m) => m.statut === s).length;
+  const resteDuTotal = membres.reduce((a, m) => a + (m.resteDu ?? 0), 0);
+
+  const confirmes = versements.filter((v) => v.status === "confirme");
+  const collecteTour = tour ? confirmes.filter((v) => v.tourId === tour.id).reduce((a, v) => a + v.montant, 0) : 0;
+  const attenduTour = payeurs.length * tontine.montantCotisation;
+
+  // Expected per round = members who owed it (all except that round's beneficiary), approximated
+  // with today's members; collected = validated payments recorded on that round.
+  const rounds: RoundPoint[] = tontine.tours.map((t) => ({
+    numero: t.numero,
+    enCours: t.status === "Ouvert",
+    collecte: confirmes.filter((v) => v.tourId === t.id).reduce((a, v) => a + v.montant, 0),
+    attendu: Math.max(0, membres.filter((m) => m.statut !== "suspendu").length - 1) * tontine.montantCotisation,
+  }));
+
+  const lignes = [...membres].sort((a, b) => (ordreStatut[a.statut] ?? 9) - (ordreStatut[b.statut] ?? 9) || (a.rang ?? 0) - (b.rang ?? 0));
 
   return (
-    <div className="max-w-6xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {tontine.nom}
-        </h1>
-        <p className="text-gray-500 mt-1">{tontine.description}</p>
-        <StatusBadge status={tontine.status} />
-      </div>
+    <>
+      <PageHeader
+        eyebrow="Tontine"
+        badge={<Badge status={tontine.status} label={libelleStatutGroupe(tontine.status)} />}
+        title={tontine.nom}
+        subtitle={tontine.description}
+        actions={<Link href="/gestionnaire/paiements" className="btn-primary"><Icon name="cash" />Encaisser une cotisation</Link>}
+      >
+        <p className="text-[13px] text-muted">
+          {formatMontant(tontine.montantCotisation)} · {libellePeriodicite(tontine.periodicite).toLowerCase()} · {membres.length} / {tontine.maxMembres} membres
+        </p>
+      </PageHeader>
 
-      {/* ── Stats Cards ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Membres"
-          value={`${membresActifs.length} / ${tontine.maxMembres}`}
-          subtitle="inscrits"
-        />
-        <StatCard
-          title="Cotisation"
-          value={formatMontant(tontine.montantCotisation)}
-          subtitle={tontine.periodicite}
-        />
-        <StatCard
-          title="Paiements confirmés"
-          value={membresPaye.length}
-          subtitle={`sur ${payeurs.length}`}
-          trend={payeurs.length > 0 && membresPaye.length === payeurs.length ? "up" : "neutral"}
-        />
-        <StatCard
-          title="En retard"
-          value={membresEnRetard.length}
-          trend={membresEnRetard.length > 0 ? "down" : "up"}
-          trendValue={
-            membresEnRetard.length > 0
-              ? `${membresEnRetard.length} membre(s)`
-              : "Tous à jour"
-          }
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <Stat label="Tour en cours" value={tour ? `Tour ${tour.numero}` : "—"}
+          context={tour?.beneficiaire ? `Bénéficiaire : ${tour.beneficiaire.nom}` : tontine.status === "Draft" ? "La tontine n'est pas encore activée" : "Aucun tour ouvert"} />
+        <Stat label="Collecté sur ce tour" value={formatMontant(collecteTour)}
+          meter={attenduTour > 0 ? (collecteTour / attenduTour) * 100 : 0}
+          context={`sur ${formatMontant(attenduTour)} attendus`} />
+        <Stat label="Membres à jour" value={`${compte("paye")} / ${payeurs.length}`}
+          context={compte("en_attente") > 0 ? `${compte("en_attente")} paiement(s) à valider` : "Aucun paiement à valider"}
+          tone={compte("en_attente") > 0 ? "warn" : undefined} />
+        <Stat label="Reste dû (tours passés)" value={formatMontant(resteDuTotal)}
+          context={resteDuTotal > 0 ? `${membres.filter((m) => (m.resteDu ?? 0) > 0).length} membre(s) concerné(s)` : "Aucun arriéré"}
+          tone={resteDuTotal > 0 ? "bad" : "good"} />
       </div>
 
       {demandes.length > 0 && (
-        <AdhesionsEnAttente tontineId={tontine.id} demandes={demandes} />
+        <AdhesionsEnAttente tontineId={tontine.id} demandes={demandes} rattrapage={tontine.rattrapageAdhesionTardive ?? true} />
       )}
 
-      {arrieres.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6 border border-amber-200">
-          <h2 className="text-lg font-semibold text-amber-900 mb-1">Reste dû sur les tours précédents</h2>
-          <p className="text-sm text-gray-500 mb-4">
-            Cotisations non réglées des tours passés, y compris le rattrapage des membres arrivés en cours de cycle.
-          </p>
-          <ul className="divide-y divide-gray-200">
-            {arrieres.map((m) => (
-              <li key={m.id} className="py-3 flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium text-gray-900">{m.nom}</p>
-                  <p className="text-sm text-gray-500">Tours {m.toursImpayes?.join(", ")}</p>
-                </div>
-                <span className="font-semibold text-amber-900 tabular-nums">{formatMontant(m.resteDu ?? 0)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* ── Tour actuel ────────────────────────────────────────────── */}
-      {tourActuel && (
-        <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Tour en cours — #{tourActuel.numero}
-          </h2>
-          {tourActuel.beneficiaire && (
-            <p className="text-sm text-gray-600 mb-4">
-              Bénéficiaire :{" "}
-              <span className="font-medium">
-                {tourActuel.beneficiaire.nom}
-              </span>
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* ── Membres en retard + Relancer ───────────────────────────── */}
-      {membresEnRetard.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6 border border-red-200">
-          <h2 className="text-lg font-semibold text-red-800 mb-4">
-            Membres en retard de paiement
-          </h2>
-          <ul className="divide-y divide-gray-200">
-            {membresEnRetard.map((membre) => (
-              <li
-                key={membre.id}
-                className="py-3 flex items-center justify-between"
-              >
-                <div>
-                  <p className="font-medium text-gray-900">{membre.nom}</p>
-                  {membre.telephone && (
-                    <p className="text-sm text-gray-500">
-                      {membre.telephone}
-                    </p>
-                  )}
-                </div>
-                <RelancerButton
-                  membreId={membre.id}
-                  membreNom={membre.nom}
-                  tontineId={tontine.id}
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <ReglesAdhesionTontine
-        tontineId={tontine.id}
-        mode={tontine.adhesionEnCours ?? "AvecValidation"}
-        rattrapage={tontine.rattrapageAdhesionTardive ?? true}
-      />
-
-      {/* ── Derniers paiements ─────────────────────────────────────── */}
-      <div className="bg-white rounded-lg shadow border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Derniers paiements
-          </h2>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Payeur
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Montant
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Statut
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Date
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {payments.map((paiement) => (
-                <tr key={paiement.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {paiement.payeurNom}
+      <Card title={tour ? `Tour ${tour.numero} : où en sont les membres` : "Membres"}
+        subtitle={tour ? `Le bénéficiaire ne cotise pas pour son propre tour. Échéance du tour : ${tour.dateLimite ? formatDate(tour.dateLimite) : "—"}.` : undefined}
+        bodyClassName="pt-4">
+        {tour && (
+          <div className="px-5 md:px-6 pb-5">
+            <SegmentedBar total={payeurs.length} segments={[
+              { key: "paye", label: "Payé", value: compte("paye"), className: "bg-good" },
+              { key: "en_attente", label: "À valider", value: compte("en_attente"), className: "bg-warn-mark", textClass: "text-[#0b0b0b]" },
+              { key: "a_payer", label: "À payer", value: compte("a_payer"), className: "bg-chart-2", textClass: "text-ink" },
+              { key: "en_retard", label: "En retard", value: compte("en_retard"), className: "bg-bad" },
+            ]} />
+          </div>
+        )}
+        <div className="overflow-x-auto border-t border-line">
+          <table className="table">
+            <thead><tr><th>Membre</th><th>Rang</th><th>Ce tour</th><th className="text-right">Reste dû</th><th className="text-right">Action</th></tr></thead>
+            <tbody>
+              {lignes.map((m: MembreDto) => (
+                <tr key={m.id}>
+                  <td>
+                    <p className="font-medium text-ink">{m.nom}</p>
+                    {m.telephone && <p className="text-[12px] text-muted num">{m.telephone}</p>}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {maskMontant(paiement.montant, true)}
+                  <td className="num text-ink-2">{m.rang}</td>
+                  <td><Badge status={m.statut} /></td>
+                  <td className="text-right num">
+                    {(m.resteDu ?? 0) > 0
+                      ? <span className="text-bad font-medium" title={`Tours ${m.toursImpayes?.join(", ")}`}>{formatMontant(m.resteDu ?? 0)}</span>
+                      : <span className="text-muted">—</span>}
+                    {(m.resteDu ?? 0) > 0 && <p className="text-[12px] text-muted">tours {m.toursImpayes?.join(", ")}</p>}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <StatusBadge status={paiement.status} />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(paiement.dateCreation).toLocaleDateString(
-                      "fr-FR"
-                    )}
+                  <td className="text-right">
+                    {(m.statut === "a_payer" || m.statut === "en_retard") && m.telephone
+                      ? <RelancerButton membreId={m.id} membreNom={m.nom} tontineId={tontine.id} />
+                      : null}
                   </td>
                 </tr>
               ))}
-              {payments.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-6 py-4 text-center text-sm text-gray-500"
-                  >
-                    Aucun paiement enregistré.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+        <Card className="xl:col-span-3" title="Collecte par tour" subtitle="Paiements validés, comparés au montant attendu des membres actuels.">
+          {rounds.length === 0
+            ? <EmptyState icon="cash" title="Pas encore de tour">Activez la tontine pour ouvrir le premier tour.</EmptyState>
+            : <RoundsChart data={rounds} />}
+        </Card>
+        <Card className="xl:col-span-2" title="Derniers paiements"
+          actions={<Link href="/gestionnaire/paiements" className="btn-ghost btn-sm">Tout voir <Icon name="arrow" className="h-3.5 w-3.5" /></Link>}
+          bodyClassName="pt-3">
+          {versements.length === 0 ? (
+            <EmptyState icon="receipt" title="Aucun paiement enregistré" />
+          ) : (
+            <ul className="divide-y divide-line">
+              {versements.slice(0, 6).map((v) => (
+                <li key={v.id} className="flex items-center justify-between gap-3 px-5 md:px-6 py-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-ink truncate">{v.payeurNom}</p>
+                    <p className="text-[12px] text-muted">Tour {v.tourNumero ?? "—"} · {formatDate(v.dateCreation)}</p>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <p className="num text-ink">{formatMontant(v.montant)}</p>
+                    <Badge status={v.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
 
-      {/* ── Lien Audit Trail ───────────────────────────────────────── */}
-      <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">
-          Audit Trail
-        </h2>
-        <p className="text-sm text-gray-500 mb-4">
-          Consultez l&apos;historique complet des actions sur cette tontine.
-        </p>
-        <a
-          href="/gestionnaire/audit"
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
-        >
-          Voir l&apos;audit trail
-        </a>
-      </div>
-    </div>
+      <ReglesAdhesionTontine tontineId={tontine.id} mode={tontine.adhesionEnCours ?? "AvecValidation"}
+        rattrapage={tontine.rattrapageAdhesionTardive ?? true} />
+    </>
   );
 }

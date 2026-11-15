@@ -3,18 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { formatMontant, formatDate } from "@/lib/format";
 import type { TontineDto, VersementDto } from "@/lib/types";
-import StatusBadge from "@/components/StatusBadge";
+import { Badge, Card, EmptyState, Icon, PageHeader } from "@/components/ui";
 import Pagination from "@/components/Pagination";
 
-interface PaiementsResponse {
-  items: VersementDto[];
-  totalCount: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
+interface PaiementsResponse { items: VersementDto[]; totalCount: number; page: number; pageSize: number; totalPages: number }
 
 const STATUTS_A_ENCAISSER = new Set(["a_payer", "en_retard"]);
+type Filtre = "tous" | "en_attente" | "confirme" | "rejete";
 
 export default function PaiementsPage() {
   const [paiements, setPaiements] = useState<VersementDto[]>([]);
@@ -24,22 +19,21 @@ export default function PaiementsPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [filtre, setFiltre] = useState<Filtre>("tous");
 
-  // Formulaire d'encaissement en espèces
   const [membreId, setMembreId] = useState("");
   const [tourId, setTourId] = useState("");
   const [montant, setMontant] = useState("");
   const [preuve, setPreuve] = useState("");
+  const [rejet, setRejet] = useState<{ id: string; nom: string } | null>(null);
+  const [motif, setMotif] = useState("");
 
   const pageSize = 20;
 
   const fetchAll = useCallback(async (p: number) => {
     setLoading(true);
     try {
-      const [resP, resT] = await Promise.all([
-        fetch(`/api/paiements?page=${p}&pageSize=${pageSize}`),
-        fetch(`/api/tontine`),
-      ]);
+      const [resP, resT] = await Promise.all([fetch(`/api/paiements?page=${p}&pageSize=${pageSize}`), fetch(`/api/tontine`)]);
       if (resP.ok) {
         const data: PaiementsResponse = await resP.json();
         setPaiements(data.items ?? []);
@@ -55,27 +49,18 @@ export default function PaiementsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchAll(page);
-  }, [page, fetchAll]);
+  useEffect(() => { fetchAll(page); }, [page, fetchAll]);
 
   const tourOuvert = tontine?.tours.find((t) => t.status === "Ouvert");
-  const membresAEncaisser =
-    tontine?.membres.filter(
-      (m) => STATUTS_A_ENCAISSER.has(m.statut) || (m.resteDu ?? 0) > 0
-    ) ?? [];
-
-  // Rounds the selected member can pay: arrears first (oldest), then the current round.
+  const membresAEncaisser = tontine?.membres.filter((m) => STATUTS_A_ENCAISSER.has(m.statut) || (m.resteDu ?? 0) > 0) ?? [];
   const membreChoisi = tontine?.membres.find((m) => m.id === membreId);
   const toursPossibles = membreChoisi
     ? [
         ...(membreChoisi.toursImpayes ?? []).map((n) => {
           const t = tontine!.tours.find((x) => x.numero === n);
-          return t ? { id: t.id, label: `Tour ${n} — rattrapage` } : null;
+          return t ? { id: t.id, label: `Tour ${n} · rattrapage` } : null;
         }),
-        ...(tourOuvert && STATUTS_A_ENCAISSER.has(membreChoisi.statut)
-          ? [{ id: tourOuvert.id, label: `Tour ${tourOuvert.numero} — en cours` }]
-          : []),
+        ...(tourOuvert && STATUTS_A_ENCAISSER.has(membreChoisi.statut) ? [{ id: tourOuvert.id, label: `Tour ${tourOuvert.numero} · en cours` }] : []),
       ].filter((x): x is { id: string; label: string } => x !== null)
     : [];
 
@@ -95,33 +80,20 @@ export default function PaiementsPage() {
     const res = await fetch("/api/versements/manuel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tontineId: tontine.id,
-        tourId,
-        membreId,
-        montant: Number(montant),
-        descriptionPreuve: preuve,
-      }),
+      body: JSON.stringify({ tontineId: tontine.id, tourId, membreId, montant: Number(montant), descriptionPreuve: preuve }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(null);
     if (res.ok) {
-      setMessage({ type: "ok", text: "Paiement enregistré : il est en attente de validation." });
-      setMembreId("");
-      setTourId("");
-      setPreuve("");
+      setMessage({ type: "ok", text: `Paiement de ${membreChoisi?.nom} enregistré. Il attend votre validation ci-dessous.` });
+      setMembreId(""); setTourId(""); setPreuve(""); setFiltre("tous");
       fetchAll(page);
     } else {
       setMessage({ type: "err", text: data.error ?? "Échec de l'enregistrement." });
     }
   }
 
-  async function agir(id: string, action: "valider" | "rejeter") {
-    let raison: string | null = null;
-    if (action === "rejeter") {
-      raison = window.prompt("Motif du rejet :");
-      if (!raison) return;
-    }
+  async function agir(id: string, action: "valider" | "rejeter", raison?: string) {
     setBusy(id);
     setMessage(null);
     const res = await fetch(`/api/versements/${id}/${action}`, {
@@ -132,175 +104,107 @@ export default function PaiementsPage() {
     const data = await res.json().catch(() => ({}));
     setBusy(null);
     if (res.ok) {
-      setMessage({
-        type: "ok",
-        text: action === "valider" ? `Paiement validé (réf. ${data.reference}).` : "Paiement rejeté.",
-      });
+      setMessage({ type: "ok", text: action === "valider" ? `Paiement validé · référence ${data.reference}` : "Paiement rejeté. Le membre redevient « à payer »." });
+      setRejet(null); setMotif("");
       fetchAll(page);
     } else {
       setMessage({ type: "err", text: data.error ?? "Action impossible." });
     }
   }
 
+  const aValider = paiements.filter((p) => p.status === "en_attente").length;
+  const visibles = filtre === "tous" ? paiements : paiements.filter((p) => p.status === filtre);
+
   return (
-    <div className="max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Paiements</h1>
-        <p className="text-sm text-gray-500">
-          Enregistrez les cotisations remises en espèces, puis validez-les après vérification de la preuve.
-        </p>
-      </div>
+    <>
+      <PageHeader eyebrow="Tontine" title="Paiements"
+        subtitle="Enregistrez les cotisations remises en espèces, puis validez-les après avoir vérifié la preuve. Saisie et validation sont deux étapes tracées dans le journal." />
 
-      {message && (
-        <div
-          data-testid="message"
-          className={`px-4 py-3 rounded-md text-sm border ${
-            message.type === "ok"
-              ? "bg-green-50 border-green-200 text-green-800"
-              : "bg-red-50 border-red-200 text-red-800"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+      {message && <div data-testid="message" role="status" className={message.type === "ok" ? "notice-ok" : "notice-err"}>{message.text}</div>}
 
-      {/* ── Encaissement en espèces ───────────────────────────────── */}
-      <form
-        onSubmit={enregistrer}
-        className="bg-white rounded-lg shadow border border-gray-200 p-6 space-y-4"
-      >
-        <h2 className="text-lg font-semibold text-gray-900">
-          Enregistrer un paiement en espèces
-          {tourOuvert && (
-            <span className="ml-2 text-sm font-normal text-gray-500">— tour n°{tourOuvert.numero}</span>
-          )}
-        </h2>
+      <Card title="Encaisser une cotisation"
+        subtitle={tourOuvert ? `Tour ${tourOuvert.numero} en cours. Les tours passés impayés sont proposés en rattrapage.` : undefined}>
         {!tourOuvert ? (
-          <p className="text-sm text-gray-500">Aucun tour ouvert : activez la tontine pour encaisser.</p>
+          <EmptyState icon="cash" title="Aucun tour ouvert">Activez la tontine pour commencer à encaisser.</EmptyState>
+        ) : membresAEncaisser.length === 0 ? (
+          <EmptyState icon="check" title="Tout le monde est à jour">Aucune cotisation n&apos;est attendue pour le moment.</EmptyState>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-            <label className="block text-sm">
-              <span className="text-gray-700">Membre</span>
-              <select
-                name="membre"
-                value={membreId}
-                onChange={(e) => choisirMembre(e.target.value)}
-                required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
-              >
-                <option value="">— Choisir —</option>
+          <form onSubmit={enregistrer} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1.3fr_1.1fr_0.8fr_1.1fr_auto] gap-4 items-end">
+            <div>
+              <label htmlFor="membre" className="label">Membre</label>
+              <select id="membre" name="membre" value={membreId} onChange={(e) => choisirMembre(e.target.value)} required className="input">
+                <option value="">Choisir un membre</option>
                 {membresAEncaisser.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.nom}
-                    {m.statut === "en_retard" ? " (en retard)" : ""}
-                    {(m.resteDu ?? 0) > 0 ? ` (reste dû ${formatMontant(m.resteDu ?? 0)})` : ""}
+                    {m.nom}{m.statut === "en_retard" ? " · en retard" : ""}{(m.resteDu ?? 0) > 0 ? ` · reste dû ${formatMontant(m.resteDu ?? 0)}` : ""}
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Tour</span>
-              <select
-                name="tour"
-                value={tourId}
-                onChange={(e) => setTourId(e.target.value)}
-                required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
-              >
-                <option value="">— Choisir —</option>
-                {toursPossibles.map((t) => (
-                  <option key={t.id} value={t.id}>{t.label}</option>
-                ))}
+            </div>
+            <div>
+              <label htmlFor="tour" className="label">Tour</label>
+              <select id="tour" name="tour" value={tourId} onChange={(e) => setTourId(e.target.value)} required className="input" disabled={!membreChoisi}>
+                <option value="">{membreChoisi ? "Choisir le tour" : "Selon le membre"}</option>
+                {toursPossibles.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Montant (FCFA)</span>
-              <input
-                name="montant"
-                type="number"
-                min={100}
-                value={montant}
-                onChange={(e) => setMontant(e.target.value)}
-                required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Preuve (n° de reçu…)</span>
-              <input
-                name="preuve"
-                value={preuve}
-                onChange={(e) => setPreuve(e.target.value)}
-                required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={busy === "form"}
-              className="bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white text-sm font-medium rounded-md px-4 py-2"
-            >
-              Enregistrer
-            </button>
+            </div>
+            <div>
+              <label htmlFor="montant" className="label">Montant (FCFA)</label>
+              <input id="montant" name="montant" type="number" min={100} value={montant} onChange={(e) => setMontant(e.target.value)} required className="input num" />
+            </div>
+            <div>
+              <label htmlFor="preuve" className="label">Preuve</label>
+              <input id="preuve" name="preuve" value={preuve} onChange={(e) => setPreuve(e.target.value)} required placeholder="N° du reçu, du bordereau…" className="input" />
+            </div>
+            <button type="submit" disabled={busy === "form"} className="btn-primary h-10"><Icon name="plus" />Enregistrer</button>
+          </form>
+        )}
+      </Card>
+
+      <Card title="Historique des paiements"
+        subtitle={aValider > 0 ? `${aValider} paiement(s) attendent votre validation.` : "Tous les paiements saisis ont été traités."}
+        actions={
+          <div className="inline-flex rounded-lg border border-line p-0.5 bg-surface-2" role="tablist" aria-label="Filtrer par statut">
+            {([["tous", "Tous"], ["en_attente", "À valider"], ["confirme", "Validés"], ["rejete", "Rejetés"]] as [Filtre, string][]).map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={filtre === k} onClick={() => setFiltre(k)}
+                className={`h-7 px-3 rounded-md text-[12.5px] font-medium ${filtre === k ? "bg-surface text-ink shadow-sm" : "text-ink-2 hover:text-ink"}`}>{l}</button>
+            ))}
+          </div>
+        }
+        bodyClassName="pt-4">
+        {rejet && (
+          <div className="mx-5 md:mx-6 mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-bad/30 bg-bad-soft p-3">
+            <div className="flex-1 min-w-[220px]">
+              <label htmlFor="motif" className="label">Motif du rejet du paiement de {rejet.nom}</label>
+              <input id="motif" name="motif" value={motif} onChange={(e) => setMotif(e.target.value)} autoFocus className="input" placeholder="Ex. : reçu illisible" />
+            </div>
+            <button disabled={!motif.trim() || busy === rejet.id} onClick={() => agir(rejet.id, "rejeter", motif)} className="btn-danger h-10">Confirmer le rejet</button>
+            <button onClick={() => { setRejet(null); setMotif(""); }} className="btn-ghost h-10">Annuler</button>
           </div>
         )}
-      </form>
-
-      {/* ── Historique ────────────────────────────────────────────── */}
-      <div className="bg-white rounded-lg shadow border border-gray-200">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {["Payeur", "Tour", "Montant", "Statut", "Référence", "Date", "Actions"].map((h) => (
-                  <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+        <div className="overflow-x-auto border-t border-line">
+          <table className="table">
+            <thead><tr><th>Payeur</th><th>Tour</th><th className="text-right">Montant</th><th>Statut</th><th>Référence</th><th>Saisi le</th><th className="text-right">Actions</th></tr></thead>
+            <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-400">
-                    Chargement...
-                  </td>
-                </tr>
-              ) : paiements.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-400">
-                    Aucun paiement enregistré.
-                  </td>
-                </tr>
+                <tr><td colSpan={7} className="text-center text-muted py-8">Chargement…</td></tr>
+              ) : visibles.length === 0 ? (
+                <tr><td colSpan={7}><EmptyState icon="receipt" title="Aucun paiement dans cette vue" /></td></tr>
               ) : (
-                paiements.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{p.payeurNom}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.tourNumero ?? "—"}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatMontant(p.montant)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <StatusBadge status={p.status} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500 font-mono">{p.reference ?? "—"}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(p.dateCreation)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                visibles.map((p) => (
+                  <tr key={p.id}>
+                    <td className="font-medium text-ink">{p.payeurNom}</td>
+                    <td className="text-ink-2 num">{p.tourNumero ?? "—"}</td>
+                    <td className="text-right num">{formatMontant(p.montant)}</td>
+                    <td><Badge status={p.status} /></td>
+                    <td className="text-[12px] text-muted font-mono">{p.reference ?? "—"}</td>
+                    <td className="text-ink-2 whitespace-nowrap">{formatDate(p.dateCreation)}</td>
+                    <td className="text-right whitespace-nowrap">
                       {p.status === "en_attente" && (
-                        <>
-                          <button
-                            onClick={() => agir(p.id, "valider")}
-                            disabled={busy === p.id}
-                            className="text-green-700 hover:text-green-900 font-medium disabled:opacity-50"
-                          >
-                            Valider
-                          </button>
-                          <button
-                            onClick={() => agir(p.id, "rejeter")}
-                            disabled={busy === p.id}
-                            className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
-                          >
-                            Rejeter
-                          </button>
-                        </>
+                        <span className="inline-flex gap-2">
+                          <button onClick={() => setRejet({ id: p.id, nom: p.payeurNom })} disabled={busy === p.id} className="btn-secondary btn-sm">Rejeter</button>
+                          <button onClick={() => agir(p.id, "valider")} disabled={busy === p.id} className="btn-primary btn-sm"><Icon name="check" className="h-3.5 w-3.5" />Valider</button>
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -309,10 +213,10 @@ export default function PaiementsPage() {
             </tbody>
           </table>
         </div>
-        <div className="px-6 border-t border-gray-200">
+        <div className="px-5 md:px-6 border-t border-line">
           <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
-      </div>
-    </div>
+      </Card>
+    </>
   );
 }

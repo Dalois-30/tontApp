@@ -2,19 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { formatMontant } from "@/lib/format";
+import { formatMontant, formatJour, libelleStatutGroupe } from "@/lib/format";
 import type { ProjetResume, ReglesProjet } from "@/lib/types";
 import ReglesProjetForm, { REGLES_PAR_DEFAUT } from "@/components/ReglesProjetForm";
+import { Badge, Card, EmptyState, Icon, Meter, PageHeader } from "@/components/ui";
 
 const PERIODICITES = [
   { value: "Monthly", label: "Mensuelle" },
-  { value: "Biweekly", label: "Toutes les 2 semaines" },
+  { value: "Biweekly", label: "Toutes les deux semaines" },
   { value: "Weekly", label: "Hebdomadaire" },
 ];
 
 function premierDuMoisProchain(): string {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth() + 1, 1).toISOString().slice(0, 10);
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth() + 1, 1)).toISOString().slice(0, 10);
 }
 
 export default function ProjetsPage() {
@@ -40,14 +41,10 @@ export default function ProjetsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    charger();
-  }, [charger]);
+  useEffect(() => { charger(); }, [charger]);
 
-  const listePaliers = paliers
-    .split(/[,;\s]+/)
-    .map((p) => Number(p.replace(/\D/g, "")))
-    .filter((p) => p > 0);
+  const listePaliers = paliers.split(/[,;]+/).map((p) => Number(p.replace(/\D/g, ""))).filter((p) => p > 0);
+  const engagementMax = listePaliers.length ? Math.max(...listePaliers) * Number(nombreEcheances || 0) : 0;
 
   async function creer(e: React.FormEvent) {
     e.preventDefault();
@@ -56,142 +53,86 @@ export default function ProjetsPage() {
     const res = await fetch("/api/projets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nom,
-        description,
-        objectif: Number(objectif),
-        paliers: listePaliers,
-        periodicite,
-        dateDebut,
-        nombreEcheances: Number(nombreEcheances),
-        regles,
-      }),
+      body: JSON.stringify({ nom, description, objectif: Number(objectif), paliers: listePaliers, periodicite, dateDebut, nombreEcheances: Number(nombreEcheances), regles }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) {
-      setError(data.error ?? "Création impossible.");
-      return;
-    }
+    if (!res.ok) { setError(data.error ?? "Création impossible."); return; }
     window.location.href = `/gestionnaire/projets/${data.id}`;
   }
 
   return (
-    <div className="max-w-6xl space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Projets collectifs</h1>
-          <p className="text-sm text-gray-500">
-            Un objectif commun, des paliers d&apos;engagement, un échéancier. Les dépenses sont prélevées sur le solde.
-          </p>
-        </div>
-        <button
-          onClick={() => setOuvert((o) => !o)}
-          className="bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-md px-4 py-2"
-        >
-          {ouvert ? "Fermer" : "Nouveau projet"}
-        </button>
-      </div>
+    <>
+      <PageHeader eyebrow="Gestion" title="Projets collectifs"
+        subtitle="Un objectif commun financé par paliers d'engagement, selon un échéancier. Les dépenses sont prélevées sur le solde, après validation."
+        actions={<button onClick={() => setOuvert((o) => !o)} className={ouvert ? "btn-secondary" : "btn-primary"} aria-expanded={ouvert}>
+          {ouvert ? "Fermer le formulaire" : <><Icon name="plus" />Nouveau projet</>}
+        </button>} />
 
       {ouvert && (
-        <form onSubmit={creer} className="bg-white rounded-lg shadow border border-gray-200 p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Nouveau projet</h2>
-          {error && <p className="text-sm text-red-700">{error}</p>}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="block text-sm">
-              <span className="text-gray-700">Nom du projet</span>
-              <input id="projet-nom" value={nom} onChange={(e) => setNom(e.target.value)} required
-                placeholder="Ex. : Moulin à grains du groupement"
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Objectif (FCFA)</span>
-              <input id="projet-objectif" type="number" min={1} value={objectif} onChange={(e) => setObjectif(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-            <label className="block text-sm md:col-span-2">
-              <span className="text-gray-700">Description</span>
-              <input id="projet-description" value={description} onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Paliers proposés (FCFA par échéance)</span>
-              <input id="projet-paliers" value={paliers} onChange={(e) => setPaliers(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-              <span className="text-xs text-gray-500">
-                {listePaliers.length > 0 ? listePaliers.map((p) => formatMontant(p)).join(" · ") : "Séparez les montants par des virgules"}
-              </span>
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Périodicité</span>
-              <select id="projet-periodicite" value={periodicite} onChange={(e) => setPeriodicite(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
-                {PERIODICITES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Première échéance</span>
-              <input id="projet-debut" type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Nombre d&apos;échéances</span>
-              <input id="projet-echeances" type="number" min={1} max={120} value={nombreEcheances}
-                onChange={(e) => setNombreEcheances(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-          </div>
-          <div className="border-t border-gray-200 pt-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Règles du projet</h3>
-            <ReglesProjetForm value={regles} onChange={setRegles} />
-          </div>
-          <button type="submit" disabled={busy}
-            className="bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white text-sm font-medium rounded-md px-4 py-2">
-            Créer le projet
-          </button>
-        </form>
+        <Card title="Nouveau projet" subtitle="Vous pourrez ajuster les règles plus tard ; chaque modification est journalisée.">
+          <form onSubmit={creer} className="space-y-8">
+            {error && <p className="notice-err">{error}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-5">
+                <div><label htmlFor="projet-nom" className="label">Nom du projet</label>
+                  <input id="projet-nom" value={nom} onChange={(e) => setNom(e.target.value)} required placeholder="Ex. : moulin à grains du groupement" className="input" /></div>
+                <div><label htmlFor="projet-objectif" className="label">Objectif (FCFA)</label>
+                  <input id="projet-objectif" type="number" min={1} value={objectif} onChange={(e) => setObjectif(e.target.value)} required className="input num" /></div>
+              </div>
+              <div className="md:col-span-2"><label htmlFor="projet-description" className="label">Description</label>
+                <input id="projet-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="À quoi servira l'argent collecté" className="input" /></div>
+              <div><label htmlFor="projet-paliers" className="label">Paliers proposés, par échéance</label>
+                <input id="projet-paliers" value={paliers} onChange={(e) => setPaliers(e.target.value)} required className="input num" />
+                <p className="hint">{listePaliers.length ? listePaliers.map((p) => formatMontant(p)).join(" · ") : "Séparez les montants par des virgules"}</p></div>
+              <div><label htmlFor="projet-periodicite" className="label">Périodicité des échéances</label>
+                <select id="projet-periodicite" value={periodicite} onChange={(e) => setPeriodicite(e.target.value)} className="input">
+                  {PERIODICITES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select></div>
+              <div><label htmlFor="projet-debut" className="label">Première échéance</label>
+                <input id="projet-debut" type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} required className="input" /></div>
+              <div><label htmlFor="projet-echeances" className="label">Nombre d&apos;échéances</label>
+                <input id="projet-echeances" type="number" min={1} max={120} value={nombreEcheances} onChange={(e) => setNombreEcheances(e.target.value)} required className="input num" />
+                <p className="hint">Au palier le plus haut, un participant s&apos;engage sur {formatMontant(engagementMax)}.</p></div>
+            </div>
+            <div className="border-t border-line pt-6 space-y-4">
+              <h3 className="section-title">Règles du projet</h3>
+              <ReglesProjetForm value={regles} onChange={setRegles} />
+            </div>
+            <div className="flex gap-3"><button type="submit" disabled={busy} className="btn-primary">Créer le projet</button>
+              <button type="button" onClick={() => setOuvert(false)} className="btn-ghost">Annuler</button></div>
+          </form>
+        </Card>
       )}
 
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              {["Projet", "Statut", "Participants", "Collecté", "Objectif", "Progression"].map((h) => (
-                <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {loading ? (
-              <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">Chargement...</td></tr>
-            ) : projets.length === 0 ? (
-              <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">
-                Aucun projet. Créez le premier avec « Nouveau projet ».
-              </td></tr>
-            ) : (
-              projets.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium">
-                    <Link href={`/gestionnaire/projets/${p.id}`} className="text-green-800 hover:underline">{p.nom}</Link>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{p.statut}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600 tabular-nums">{p.participants}</td>
-                  <td className="px-6 py-4 text-sm tabular-nums">{formatMontant(p.totalCollecte)}</td>
-                  <td className="px-6 py-4 text-sm tabular-nums text-gray-600">{formatMontant(p.objectif)}</td>
-                  <td className="px-6 py-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-28 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-700" style={{ width: `${Math.min(100, p.progression)}%` }} />
-                      </div>
-                      <span className="tabular-nums text-gray-600">{p.progression}%</span>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      {loading ? (
+        <p className="text-muted">Chargement…</p>
+      ) : projets.length === 0 ? (
+        <div className="card"><EmptyState icon="target" title="Aucun projet pour le moment">Créez le premier avec « Nouveau projet », puis partagez son code d&apos;invitation.</EmptyState></div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {projets.map((p) => (
+            <Link key={p.id} href={`/gestionnaire/projets/${p.id}`}
+              className="card p-5 space-y-4 transition-colors hover:border-brand/50 focus-visible:border-brand">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-[16px] font-semibold text-ink truncate">{p.nom}</h2>
+                  <p className="text-[12.5px] text-muted">{p.participants} participant(s) · depuis le {formatJour(p.dateDebut)}</p>
+                </div>
+                <Badge status={p.statut} label={libelleStatutGroupe(p.statut)} />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[20px] font-semibold text-ink">{formatMontant(p.totalCollecte)}</span>
+                  <span className="text-[13px] text-brand font-medium">{p.progression} %</span>
+                </div>
+                <Meter value={p.progression} label={`Progression de ${p.nom}`} />
+                <p className="text-[12.5px] text-muted">Objectif {formatMontant(p.objectif)}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

@@ -1,15 +1,6 @@
-import { statusBadgeClass } from "@/lib/format";
+import { Badge } from "./ui";
 
-interface StatusBadgeProps {
-  status: string;
-}
-
-export default function StatusBadge({ status }: StatusBadgeProps) {
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(status)}`}
-    >
-      {status}
-    </span>
-  );
+/** Kept for existing imports: status badge with icon + French label. */
+export default function StatusBadge({ status }: { status: string }) {
+  return <Badge status={status} />;
 }

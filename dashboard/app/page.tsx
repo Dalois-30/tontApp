@@ -1,189 +1,129 @@
 import Link from "next/link";
+import { Logo } from "@/components/Sidebar";
+import { Icon } from "@/components/ui";
 
-const features = [
+const fonctions = [
   {
-    title: "Gestion transparente",
-    description:
-      "Suivez chaque cotisation en temps réel. Plus d'oublis ni de litiges grâce à un historique complet.",
-    icon: "📊",
+    icon: "cash",
+    titre: "Des cotisations sans carnet",
+    texte: "Le gestionnaire enregistre chaque cotisation remise en espèces et la valide après avoir vérifié le reçu. Les membres voient leur paiement passer à « validé » sur leur téléphone.",
   },
   {
-    title: "Paiements sécurisés",
-    description:
-      "Intégration Orange Money, Wave et autres. Vos transactions sont chiffrées et traçables.",
-    icon: "🔒",
+    icon: "users",
+    titre: "Des tours qui tournent seuls",
+    texte: "Ordre des bénéficiaires, retardataires, relances par SMS, adhésion en cours de cycle avec rattrapage : les règles sont celles que votre groupe choisit.",
   },
   {
-    title: "Notifications automatiques",
-    description:
-      "Rappels de cotisation, relances automatiques et messages personnalisés pour ne rien rater.",
-    icon: "🔔",
+    icon: "target",
+    titre: "Des projets collectifs par paliers",
+    texte: "Chacun s'engage sur un palier par échéance. Paiements partiels, avance, changement de palier et dépenses suivent des règles configurables.",
+  },
+  {
+    icon: "shield",
+    titre: "Un journal impossible à truquer",
+    texte: "Chaque saisie, validation ou rejet est chaînée par empreinte SHA-256. Une ligne modifiée après coup se voit immédiatement.",
   },
 ];
 
-const pricing = [
-  {
-    name: "Gratuit",
-    price: "0 FCFA",
-    period: "/mois",
-    features: [
-      "1 tontine active",
-      "Jusqu'à 10 membres",
-      "Notifications push",
-      "Historique basique",
-    ],
-    cta: "Commencer",
-    highlighted: false,
-  },
-  {
-    name: "Premium",
-    price: "2 500 FCFA",
-    period: "/mois",
-    features: [
-      "Tontines illimitées",
-      "Membres illimités",
-      "SMS & WhatsApp",
-      "Export PDF",
-      "Score de crédit",
-      "Support prioritaire",
-    ],
-    cta: "Essai gratuit 30j",
-    highlighted: true,
-  },
+const offres = [
+  { nom: "Gratuit", prix: "0 FCFA", periode: "par mois", points: ["1 tontine", "Jusqu'à 10 membres", "Projets collectifs", "Journal d'audit"], cta: "Commencer", mis: false },
+  { nom: "Pro", prix: "2 000 FCFA", periode: "par mois", points: ["Jusqu'à 10 tontines", "Membres illimités", "Relances SMS", "Export PDF"], cta: "Choisir Pro", mis: true },
+  { nom: "IMF", prix: "Sur devis", periode: "", points: ["Tontines et membres illimités", "Accompagnement au déploiement", "Pour les institutions de microfinance"], cta: "Nous contacter", mis: false },
 ];
 
-export default function LandingPage() {
+export default function Accueil() {
   return (
-    <main className="min-h-screen bg-white">
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-green-800 to-green-600 text-white">
-        <nav className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <span className="text-xl font-bold">TontinesApp</span>
-          <Link
-            href="/login"
-            className="rounded-lg bg-white/20 px-4 py-2 text-sm font-medium hover:bg-white/30 transition"
-          >
-            Connexion
-          </Link>
+    <div className="min-h-screen bg-bg">
+      <header className="border-b border-line bg-surface">
+        <nav className="mx-auto max-w-6xl px-4 md:px-8 h-16 flex items-center justify-between">
+          <Logo />
+          <Link href="/login" className="btn-secondary">Espace gestionnaire</Link>
         </nav>
+      </header>
 
-        <div className="max-w-4xl mx-auto px-6 py-24 text-center">
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-6">
-            Gérez vos tontines
-            <br />
-            en toute sérénité
+      <section className="mx-auto max-w-6xl px-4 md:px-8 py-16 md:py-20 grid gap-12 lg:grid-cols-[1.1fr_1fr] items-center">
+        <div className="space-y-6">
+          <p className="eyebrow text-accent">Tontines et projets collectifs</p>
+          <h1 className="text-[40px] md:text-[52px] leading-[1.05] font-semibold tracking-tight text-ink">
+            Le carnet de la tontine,<br />tenu juste et partagé.
           </h1>
-          <p className="text-lg md:text-xl text-green-100 mb-10 max-w-2xl mx-auto">
-            L&apos;application qui digitalise vos tontines : transparence totale,
-            paiements sécurisés et suivi en temps réel.
+          <p className="text-[17px] text-ink-2 max-w-[52ch]">
+            TontApp ne touche pas à votre argent : il reste entre vos mains ou à la banque. L&apos;application tient le registre,
+            les membres le consultent sur leur téléphone, le gestionnaire valide chaque mouvement.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/login"
-              className="rounded-xl bg-orange-500 px-8 py-3 text-lg font-semibold hover:bg-orange-600 transition shadow-lg"
-            >
-              Commencer gratuitement
-            </Link>
-            <a
-              href="#fonctionnalites"
-              className="rounded-xl border-2 border-white/40 px-8 py-3 text-lg font-semibold hover:bg-white/10 transition"
-            >
-              En savoir plus
-            </a>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/login" className="btn-primary h-11 px-5 text-[14px]">Ouvrir le tableau de bord <Icon name="arrow" /></Link>
+            <a href="#fonctions" className="btn-ghost h-11 px-4 text-[14px]">Voir les fonctions</a>
           </div>
+        </div>
+
+        {/* A real artefact of the product: the current round, as members see it. */}
+        <div className="card p-6 space-y-5 shadow-[0_24px_60px_-30px_rgba(20,26,22,0.35)]">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[12.5px] text-muted">Tontine du marché · tour 3</p>
+              <p className="text-[18px] font-semibold text-ink">Bénéficiaire : Seydou</p>
+            </div>
+            <span className="inline-flex items-center gap-1 rounded-full bg-good-soft text-good h-6 px-2 text-[12px] font-medium"><Icon name="check" className="h-3.5 w-3.5" />Active</span>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-[13px]"><span className="text-ink-2">Collecté</span><span className="font-medium num">30 000 / 40 000 FCFA</span></div>
+            <div className="h-2 rounded-full bg-brand-soft"><div className="h-full w-3/4 rounded-full bg-brand" /></div>
+          </div>
+          <ul className="divide-y divide-line text-[13.5px]">
+            {[["Awa", "Validé", "good"], ["Ibrahim", "Validé", "good"], ["Mariam", "À valider", "warn"], ["Fatou", "À payer", "neutral"]].map(([n, s, t]) => (
+              <li key={n} className="flex items-center justify-between py-2.5">
+                <span className="text-ink">{n}</span>
+                <span className={`inline-flex items-center gap-1 rounded-full h-6 px-2 text-[12px] font-medium ${t === "good" ? "bg-good-soft text-good" : t === "warn" ? "bg-warn-soft text-warn" : "bg-surface-2 text-ink-2"}`}>
+                  <Icon name={t === "good" ? "check" : t === "warn" ? "clock" : "minus"} className="h-3.5 w-3.5" />{s}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
-      {/* Features */}
-      <section id="fonctionnalites" className="max-w-6xl mx-auto px-6 py-20">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-          Pourquoi TontinesApp ?
-        </h2>
-        <div className="grid md:grid-cols-3 gap-8">
-          {features.map((f) => (
-            <div
-              key={f.title}
-              className="rounded-2xl border border-gray-200 p-8 hover:shadow-lg transition"
-            >
-              <span className="text-4xl mb-4 block">{f.icon}</span>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                {f.title}
-              </h3>
-              <p className="text-gray-600 leading-relaxed">{f.description}</p>
+      <section id="fonctions" className="border-y border-line bg-surface">
+        <div className="mx-auto max-w-6xl px-4 md:px-8 py-16 grid gap-10 md:grid-cols-2">
+          {fonctions.map((f) => (
+            <div key={f.titre} className="flex gap-4">
+              <span className="h-10 w-10 shrink-0 rounded-lg bg-brand-soft text-brand grid place-items-center"><Icon name={f.icon} className="h-5 w-5" /></span>
+              <div className="space-y-1.5">
+                <h2 className="text-[16px] font-semibold text-ink">{f.titre}</h2>
+                <p className="text-ink-2 max-w-[56ch]">{f.texte}</p>
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Pricing */}
-      <section className="bg-gray-50 py-20">
-        <div className="max-w-4xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-            Tarifs simples
-          </h2>
-          <div className="grid md:grid-cols-2 gap-8">
-            {pricing.map((p) => (
-              <div
-                key={p.name}
-                className={`rounded-2xl p-8 ${
-                  p.highlighted
-                    ? "bg-green-800 text-white shadow-xl scale-105"
-                    : "bg-white border border-gray-200"
-                }`}
-              >
-                <h3 className="text-xl font-semibold mb-2">{p.name}</h3>
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className="text-3xl font-bold">{p.price}</span>
-                  <span
-                    className={
-                      p.highlighted ? "text-green-200" : "text-gray-500"
-                    }
-                  >
-                    {p.period}
-                  </span>
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {p.features.map((feat) => (
-                    <li key={feat} className="flex items-center gap-2">
-                      <span>✓</span>
-                      <span>{feat}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/login"
-                  className={`block text-center rounded-xl px-6 py-3 font-semibold transition ${
-                    p.highlighted
-                      ? "bg-orange-500 hover:bg-orange-600 text-white"
-                      : "bg-green-800 hover:bg-green-700 text-white"
-                  }`}
-                >
-                  {p.cta}
-                </Link>
+      <section className="mx-auto max-w-6xl px-4 md:px-8 py-16 space-y-8">
+        <div className="space-y-2">
+          <h2 className="text-[26px] font-semibold text-ink">Offres</h2>
+          <p className="text-ink-2">L&apos;abonnement concerne le gestionnaire. Les membres utilisent l&apos;application gratuitement.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {offres.map((o) => (
+            <div key={o.nom} className={`card p-6 flex flex-col gap-5 ${o.mis ? "border-brand ring-1 ring-brand" : ""}`}>
+              <div>
+                <p className="text-[15px] font-semibold text-ink">{o.nom}</p>
+                <p className="mt-2"><span className="text-[28px] font-semibold text-ink">{o.prix}</span> <span className="text-muted">{o.periode}</span></p>
               </div>
-            ))}
-          </div>
+              <ul className="space-y-2 text-[13.5px] text-ink-2 flex-1">
+                {o.points.map((pt) => <li key={pt} className="flex gap-2"><Icon name="check" className="h-4 w-4 text-brand mt-0.5" />{pt}</li>)}
+              </ul>
+              <Link href="/login" className={o.mis ? "btn-primary" : "btn-secondary"}>{o.cta}</Link>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-10">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <span className="font-semibold text-white">TontinesApp</span>
-          <p className="text-sm">
-            © {new Date().getFullYear()} TontinesApp. Tous droits réservés.
-          </p>
-          <a
-            href="https://wa.me/221771234567"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-green-400 hover:text-green-300 transition text-sm"
-          >
-            💬 Support WhatsApp
-          </a>
+      <footer className="border-t border-line">
+        <div className="mx-auto max-w-6xl px-4 md:px-8 py-8 flex flex-wrap items-center justify-between gap-4 text-[12.5px] text-muted">
+          <Logo />
+          <p>L&apos;argent reste hors de l&apos;application. TontApp tient le registre.</p>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }
-

@@ -2,26 +2,106 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  TontApp design tokens. Subject: community savings groups (tontines) in FCFA.
+  Brand green (the mobile app's own), a clay/ochre accent used sparingly, neutrals biased
+  slightly toward the green. Status colors follow the data-viz status palette and always
+  ship with an icon + a label. Values are RGB triplets so Tailwind can apply opacity.
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --bg: 246 247 243;          /* page plane */
+  --surface: 255 255 255;     /* cards */
+  --surface-2: 241 243 238;   /* table heads, inputs, wells */
+  --line: 224 228 220;        /* hairlines */
+  --ink: 20 26 22;            /* primary text */
+  --ink-2: 74 84 78;          /* secondary text */
+  --muted: 125 135 128;       /* captions, axis */
+  --brand: 27 94 32;          /* TontApp green */
+  --brand-hover: 22 78 27;
+  --on-brand: 255 255 255;
+  --brand-soft: 229 240 228;
+  --accent: 178 98 28;        /* ochre: rare emphasis */
+  --accent-soft: 249 236 222;
+  --good: 31 122 52;   --good-soft: 228 243 230;
+  --warn: 150 96 0;    --warn-soft: 254 243 214;   --warn-mark: 250 178 25;
+  --serious: 183 85 38; --serious-soft: 252 234 224;
+  --bad: 196 48 48;    --bad-soft: 252 231 229;
+  --info: 46 91 160;   --info-soft: 229 237 249;
+  --chart-1: 27 94 32;        /* collected (brand) */
+  --chart-2: 163 170 160;     /* expected / context (de-emphasis) */
+  --grid: 232 235 228;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: 14 18 15; --surface: 23 29 25; --surface-2: 30 37 32; --line: 44 52 47;
+    --ink: 233 237 232; --ink-2: 183 192 185; --muted: 135 145 138;
+    --brand: 111 191 115; --brand-hover: 134 207 138; --on-brand: 12 20 14; --brand-soft: 30 48 33;
+    --accent: 224 161 90; --accent-soft: 51 38 24;
+    --good: 101 201 125; --good-soft: 26 50 33;
+    --warn: 250 178 25;  --warn-soft: 56 44 16;  --warn-mark: 250 178 25;
+    --serious: 236 131 90; --serious-soft: 58 34 24;
+    --bad: 240 113 109;  --bad-soft: 60 28 28;
+    --info: 140 177 238; --info-soft: 27 38 58;
+    --chart-1: 111 191 115; --chart-2: 98 108 101; --grid: 38 45 40;
   }
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: 14 18 15; --surface: 23 29 25; --surface-2: 30 37 32; --line: 44 52 47;
+  --ink: 233 237 232; --ink-2: 183 192 185; --muted: 135 145 138;
+  --brand: 111 191 115; --brand-hover: 134 207 138; --on-brand: 12 20 14; --brand-soft: 30 48 33;
+  --accent: 224 161 90; --accent-soft: 51 38 24;
+  --good: 101 201 125; --good-soft: 26 50 33;
+  --warn: 250 178 25;  --warn-soft: 56 44 16;  --warn-mark: 250 178 25;
+  --serious: 236 131 90; --serious-soft: 58 34 24;
+  --bad: 240 113 109;  --bad-soft: 60 28 28;
+  --info: 140 177 238; --info-soft: 27 38 58;
+  --chart-1: 111 191 115; --chart-2: 98 108 101; --grid: 38 45 40;
+}
 
+html { background: rgb(var(--bg)); }
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
+h1, h2, h3 { text-wrap: balance; letter-spacing: -0.01em; }
+:focus-visible { outline: 2px solid rgb(var(--brand)); outline-offset: 2px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+@layer components {
+  .card { @apply rounded-xl border border-line bg-surface; }
+  .card-pad { @apply p-5 md:p-6; }
+  .section-title { @apply text-[15px] font-semibold text-ink; }
+  .section-sub { @apply text-[13px] text-ink-2 mt-0.5; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted; }
+
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 h-9 text-[13px] font-medium transition-colors disabled:opacity-45 disabled:cursor-not-allowed whitespace-nowrap; }
+  .btn-primary { @apply btn bg-brand text-on-brand hover:bg-brand-hover; }
+  .btn-secondary { @apply btn border border-line bg-surface text-ink hover:bg-surface-2; }
+  .btn-ghost { @apply btn text-ink-2 hover:bg-surface-2 hover:text-ink; }
+  .btn-danger { @apply btn border border-line bg-surface text-bad hover:bg-bad-soft; }
+  .btn-sm { @apply h-8 px-3 text-[12.5px]; }
+
+  .label { @apply block text-[12.5px] font-medium text-ink-2 mb-1.5; }
+  .input { @apply block w-full h-10 rounded-lg border border-line bg-surface px-3 text-[14px] text-ink placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 disabled:bg-surface-2 disabled:text-muted; }
+  .hint { @apply text-[12px] text-muted mt-1; }
+
+  .table { @apply min-w-full text-[13.5px]; }
+  .table thead th { @apply text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted px-4 py-2.5 bg-surface-2 border-b border-line whitespace-nowrap; }
+  .table tbody td { @apply px-4 py-3 border-b border-line align-middle; }
+  .table tbody tr:last-child td { @apply border-b-0; }
+  .table tbody tr { @apply transition-colors hover:bg-surface-2/60; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .notice { @apply rounded-lg border px-4 py-3 text-[13.5px]; }
+  .notice-ok { @apply notice border-good/25 bg-good-soft text-good; }
+  .notice-err { @apply notice border-bad/25 bg-bad-soft text-bad; }
+  .notice-info { @apply notice border-info/25 bg-info-soft text-info; }
 }

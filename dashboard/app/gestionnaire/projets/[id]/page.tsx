@@ -1,25 +1,15 @@
 "use client";
 
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { formatMontant, formatDate } from "@/lib/format";
-import type { ParticipantProjet, ProjetDetails, ReglesProjet } from "@/lib/types";
+import { formatMontant, formatDate, formatJour, libelleAction, libellePeriodicite, libelleStatutGroupe } from "@/lib/format";
+import type { ProjetDetails, ReglesProjet } from "@/lib/types";
+import { Badge, Card, EmptyState, Icon, Meter, PageHeader } from "@/components/ui";
 import ReglesProjetForm from "@/components/ReglesProjetForm";
-import StatusBadge from "@/components/StatusBadge";
+import CollecteChart, { type CollectePoint } from "@/components/charts/CollecteChart";
 
-const ECHEANCE_STYLE: Record<string, string> = {
-  soldee: "bg-green-600",
-  partielle: "bg-amber-400",
-  en_retard: "bg-red-600",
-  a_venir: "bg-gray-200",
-};
-
-const ECHEANCE_LABEL: Record<string, string> = {
-  soldee: "soldée",
-  partielle: "partielle",
-  en_retard: "en retard",
-  a_venir: "à venir",
-};
+const CASE: Record<string, string> = { soldee: "bg-good", partielle: "bg-warn-mark", en_retard: "bg-bad", a_venir: "bg-surface-2 ring-1 ring-inset ring-line" };
+const CASE_LIBELLE: Record<string, string> = { soldee: "soldée", partielle: "partielle", en_retard: "en retard", a_venir: "à venir" };
 
 export default function ProjetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -36,7 +26,7 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
   const [montantDepense, setMontantDepense] = useState("");
   const [justificatif, setJustificatif] = useState("");
   const [motif, setMotif] = useState("");
-  const [aRejeter, setARejeter] = useState<{ type: "paiements" | "depenses"; id: string } | null>(null);
+  const [aRejeter, setARejeter] = useState<{ type: "paiements" | "depenses"; id: string; nom: string } | null>(null);
   const [regles, setRegles] = useState<ReglesProjet | null>(null);
 
   const charger = useCallback(async () => {
@@ -45,39 +35,52 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
     else setMessage({ ok: false, text: (await res.json().catch(() => ({}))).error ?? "Projet introuvable." });
   }, [id]);
 
-  useEffect(() => {
-    charger();
-  }, [charger]);
+  useEffect(() => { charger(); }, [charger]);
 
   async function action(path: string, body: unknown, ok: string, method = "POST") {
     setBusy(true);
     setMessage(null);
-    const res = await fetch(`/api/projets/${id}${path}`, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body ?? {}),
-    });
+    const res = await fetch(`/api/projets/${id}${path}`, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) {
-      setMessage({ ok: false, text: data.error ?? "Action impossible." });
-      return false;
-    }
+    if (!res.ok) { setMessage({ ok: false, text: data.error ?? "Action impossible." }); return false; }
     if (data.code) setCode(data.code);
-    if (data.id) setP(data);
-    else await charger();
+    if (data.id) setP(data); else await charger();
     setMessage({ ok: true, text: ok });
     return true;
   }
 
+  // Cumulative expected (sum of every participant's instalments due by that date) vs cumulative
+  // validated payments, per instalment date, plus today's point.
+  const serie = useMemo<CollectePoint[]>(() => {
+    if (!p) return [];
+    const aujourdhui = new Date();
+    const dates = [...p.echeancier];
+    const iso = aujourdhui.toISOString();
+    if (dates.length && new Date(dates[0]) < aujourdhui && new Date(dates.at(-1)!) > aujourdhui) dates.push(iso);
+    dates.sort();
+    const dues = p.participants.flatMap((x) => x.echeances ?? []);
+    const valides = p.paiements.filter((x) => x.statut === "valide");
+    return dates.map((d) => {
+      const t = new Date(d);
+      const fin = new Date(t); fin.setHours(23, 59, 59, 999);
+      return {
+        date: d,
+        attendu: dues.filter((e) => new Date(e.date) <= t).reduce((a, e) => a + e.palier, 0),
+        collecte: t <= aujourdhui ? valides.filter((x) => new Date(x.decideLe ?? x.saisiLe) <= fin).reduce((a, x) => a + x.montant, 0) : null,
+      };
+    });
+  }, [p]);
+
   if (!p) {
-    return <div className="max-w-6xl text-sm text-gray-500">{message?.text ?? "Chargement..."}</div>;
+    return message ? <div className="notice-err">{message.text}</div> : <p className="text-muted">Chargement du projet…</p>;
   }
 
-  const enAttente = p.paiements.filter((x) => x.statut === "en_attente");
-  const depensesEnAttente = p.depenses.filter((x) => x.statut === "en_attente");
   const demandes = p.participants.filter((x) => x.palierDemande !== null);
+  const enAttente = p.paiements.filter((x) => x.statut === "en_attente").length;
+  const depensesEnAttente = p.depenses.filter((x) => x.statut === "en_attente").length;
   const choisi = p.participants.find((x) => x.id === payeur);
+  const modifiable = p.statut === "Brouillon" || p.statut === "Ouvert";
 
   function choisirPayeur(pid: string) {
     setPayeur(pid);
@@ -86,151 +89,116 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
   }
 
   return (
-    <div className="max-w-6xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Link href="/gestionnaire/projets" className="text-sm text-gray-500 hover:underline">← Projets</Link>
-          <h1 className="text-2xl font-bold text-gray-900 mt-1">{p.nom}</h1>
-          {p.description && <p className="text-gray-500 mt-1">{p.description}</p>}
-          <p className="text-sm text-gray-500 mt-1">
-            {p.statut} · paliers {p.paliers.map((x) => formatMontant(x)).join(" / ")} · {p.nombreEcheances} échéances
-            ({p.periodicite === "Monthly" ? "mensuelles" : p.periodicite === "Weekly" ? "hebdomadaires" : "bimensuelles"})
-            à partir du {new Date(p.dateDebut).toLocaleDateString("fr-FR")}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {p.statut === "Brouillon" && (
-            <button disabled={busy} onClick={() => action("/ouvrir", {}, "Projet ouvert : les paiements peuvent être enregistrés.")}
-              className="bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-md px-4 py-2 disabled:opacity-50">
-              Ouvrir le projet
-            </button>
-          )}
-          {(p.statut === "Brouillon" || p.statut === "Ouvert") && (
-            <button disabled={busy} onClick={() => action("/invitation?expirationJours=30", {}, "Code d'invitation généré (30 jours).")}
-              className="border border-gray-300 hover:border-green-700 text-sm font-medium rounded-md px-4 py-2 disabled:opacity-50">
-              Code d&apos;invitation
-            </button>
-          )}
-          {p.statut === "Ouvert" && (
-            <button disabled={busy} onClick={() => action("/clore", {}, "Projet clos.")}
-              className="border border-gray-300 hover:border-red-500 text-sm font-medium rounded-md px-4 py-2 disabled:opacity-50">
-              Clore
-            </button>
-          )}
-        </div>
-      </div>
+    <>
+      <PageHeader
+        eyebrow={<Link href="/gestionnaire/projets" className="inline-flex items-center gap-1 hover:text-ink"><Icon name="back" className="h-3.5 w-3.5" />Projets collectifs</Link>}
+        title={p.nom}
+        badge={<Badge status={p.statut} label={libelleStatutGroupe(p.statut)} />}
+        subtitle={p.description ?? undefined}
+        actions={<>
+          {modifiable && <button disabled={busy} onClick={() => action("/invitation?expirationJours=30", {}, "Code d'invitation généré, valable 30 jours.")} className="btn-secondary"><Icon name="key" />Code d&apos;invitation</button>}
+          {p.statut === "Brouillon" && <button disabled={busy} onClick={() => action("/ouvrir", {}, "Projet ouvert : vous pouvez enregistrer des paiements.")} className="btn-primary">Ouvrir le projet</button>}
+          {p.statut === "Ouvert" && <button disabled={busy} onClick={() => action("/clore", {}, "Projet clos.")} className="btn-secondary">Clore</button>}
+        </>}
+      >
+        <p className="text-[13px] text-muted">
+          Paliers {p.paliers.map((x) => formatMontant(x)).join(" · ")} · {p.nombreEcheances} échéances {libellePeriodicite(p.periodicite).toLowerCase()}s · à partir du {formatJour(p.dateDebut)}
+        </p>
+      </PageHeader>
 
-      {message && (
-        <div data-testid="message" className={`px-4 py-3 rounded-md text-sm border ${message.ok ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"}`}>
-          {message.text}
-        </div>
-      )}
+      {message && <div data-testid="message" role="status" className={message.ok ? "notice-ok" : "notice-err"}>{message.text}</div>}
       {code && (
-        <div className="bg-white border border-green-300 rounded-lg p-4 flex flex-wrap items-center gap-4">
-          <span className="text-sm text-gray-600">Code à partager avec les participants :</span>
-          <span className="font-mono text-2xl font-bold tracking-widest text-green-800" data-testid="code">{code}</span>
-          <span className="text-xs text-gray-500">Valable 30 jours, utilisable plusieurs fois. Chacun choisit son palier en rejoignant.</span>
+        <div className="card p-5 flex flex-wrap items-center gap-x-6 gap-y-2 border-brand/40">
+          <span className="text-ink-2">Code à transmettre aux participants</span>
+          <span data-testid="code" className="font-mono text-[26px] font-semibold tracking-[0.25em] text-brand">{code}</span>
+          <span className="text-[12.5px] text-muted">Utilisable plusieurs fois pendant 30 jours. Chacun choisit son palier en rejoignant depuis l&apos;application.</span>
         </div>
       )}
 
-      {/* ── Chiffres clés ─────────────────────────────────────────── */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6 space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <p className="text-sm text-gray-500">Collecté sur l&apos;objectif</p>
-            <p className="text-3xl font-bold tabular-nums">
-              {formatMontant(p.totalCollecte)} <span className="text-base font-normal text-gray-500">/ {formatMontant(p.objectif)}</span>
-            </p>
+      <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4">
+        <div className="card p-6 space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[13px] text-ink-2">Collecté sur l&apos;objectif</p>
+              <p className="text-[44px] leading-none font-semibold tracking-tight text-ink mt-2">{formatMontant(p.totalCollecte)}</p>
+              <p className="text-[13px] text-muted mt-2">sur {formatMontant(p.objectif)}</p>
+            </div>
+            <p className="text-[22px] font-semibold text-brand">{p.progression} %</p>
           </div>
-          <p className="text-lg font-semibold text-green-800 tabular-nums">{p.progression}%</p>
+          <Meter value={p.progression} label="Progression vers l'objectif" />
         </div>
-        <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-          <div className="h-full bg-green-700" style={{ width: `${Math.min(100, p.progression)}%` }} />
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div><p className="text-gray-500">Participants</p><p className="text-lg font-semibold tabular-nums">{p.participants.length}</p></div>
-          <div><p className="text-gray-500">Dépenses validées</p><p className="text-lg font-semibold tabular-nums">{formatMontant(p.totalDepense)}</p></div>
-          <div><p className="text-gray-500">Solde disponible</p><p className="text-lg font-semibold tabular-nums">{formatMontant(p.solde)}</p></div>
-          <div><p className="text-gray-500">Journal</p>
-            <p className={`text-lg font-semibold ${p.journalValide ? "text-green-700" : "text-red-700"}`}>
-              {p.journalValide ? "✔ intègre" : "✖ altéré"}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="card p-5"><p className="text-[12.5px] text-ink-2">Solde disponible</p><p className="text-[22px] font-semibold mt-1">{formatMontant(p.solde)}</p></div>
+          <div className="card p-5"><p className="text-[12.5px] text-ink-2">Dépenses validées</p><p className="text-[22px] font-semibold mt-1">{formatMontant(p.totalDepense)}</p></div>
+          <div className="card p-5"><p className="text-[12.5px] text-ink-2">Participants</p><p className="text-[22px] font-semibold mt-1">{p.participants.length}</p></div>
+          <div className="card p-5"><p className="text-[12.5px] text-ink-2">Journal</p>
+            <p className={`mt-1 inline-flex items-center gap-1.5 text-[16px] font-semibold ${p.journalValide ? "text-good" : "text-bad"}`}>
+              <Icon name={p.journalValide ? "shield" : "alert"} className="h-5 w-5" />{p.journalValide ? "Intègre" : "Altéré"}
             </p></div>
         </div>
       </div>
 
-      {/* ── Changements de palier à valider ──────────────────────── */}
+      {serie.length > 0 && p.participants.length > 0 && (
+        <Card title="Collecte et engagements" subtitle="Cumul des paiements validés comparé à ce que les paliers prévoient, échéance par échéance.">
+          <CollecteChart data={serie} />
+        </Card>
+      )}
+
       {demandes.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6 border border-blue-200" data-testid="demandes-palier">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Changements de palier à valider</h2>
-          <p className="text-sm text-gray-500 mb-4">Les règles du projet soumettent ces changements à votre validation.</p>
-          <ul className="divide-y divide-gray-200">
+        <Card className="border-info/40" title={`Changements de palier à valider (${demandes.length})`} subtitle="Les règles du projet soumettent ces changements à votre accord.">
+          <ul className="divide-y divide-line" data-testid="demandes-palier">
             {demandes.map((x) => (
-              <li key={x.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
-                <span><b>{x.nom}</b> : {formatMontant(x.palierActuel)} → {formatMontant(x.palierDemande!)}</span>
+              <li key={x.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="text-ink"><span className="font-medium">{x.nom}</span> · {formatMontant(x.palierActuel)} <Icon name="arrow" className="inline h-3.5 w-3.5 text-muted" /> <span className="font-medium">{formatMontant(x.palierDemande!)}</span></span>
                 <span className="flex gap-2">
-                  <button disabled={busy} onClick={() => action(`/participants/${x.id}/changement-palier/approuver`, {}, `Changement approuvé pour ${x.nom}.`)}
-                    className="bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-md px-3 py-1.5 disabled:opacity-50">Approuver</button>
-                  <button disabled={busy} onClick={() => action(`/participants/${x.id}/changement-palier/refuser`, {}, `Changement refusé : ${x.nom} garde son palier.`)}
-                    className="border border-gray-300 hover:border-red-400 text-sm font-medium rounded-md px-3 py-1.5 disabled:opacity-50">Refuser</button>
+                  <button disabled={busy} onClick={() => action(`/participants/${x.id}/changement-palier/refuser`, {}, `Changement refusé : ${x.nom} garde son palier.`)} className="btn-secondary btn-sm">Refuser</button>
+                  <button disabled={busy} onClick={() => action(`/participants/${x.id}/changement-palier/approuver`, {}, `Changement approuvé pour ${x.nom}.`)} className="btn-primary btn-sm"><Icon name="check" className="h-3.5 w-3.5" />Approuver</button>
                 </span>
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
 
-      {/* ── Participants ─────────────────────────────────────────── */}
-      <div className="bg-white rounded-lg shadow border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Participants et échéancier</h2>
-          <p className="text-sm text-gray-500">
-            Chaque case est une échéance : <span className="inline-block w-3 h-3 align-middle rounded-sm bg-green-600" /> soldée,{" "}
-            <span className="inline-block w-3 h-3 align-middle rounded-sm bg-amber-400" /> partielle,{" "}
-            <span className="inline-block w-3 h-3 align-middle rounded-sm bg-red-600" /> en retard,{" "}
-            <span className="inline-block w-3 h-3 align-middle rounded-sm bg-gray-200" /> à venir. Un trop-perçu est reporté sur les suivantes.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {["Participant", "Palier", "Payé", "Reste dû", "Avance", "Échéances"].map((h) => (
-                  <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
+      <Card title="Participants" bodyClassName="pt-3"
+        subtitle="Une case par échéance. Un trop-perçu se reporte sur les échéances suivantes ; cliquez sur une ligne pour le détail.">
+        <ul className="flex flex-wrap gap-x-5 gap-y-1 px-5 md:px-6 pb-3 text-[12.5px] text-ink-2">
+          {Object.entries(CASE_LIBELLE).map(([k, l]) => (
+            <li key={k} className="inline-flex items-center gap-2"><span className={`h-3 w-3 rounded-[3px] ${CASE[k]}`} />{l}</li>
+          ))}
+        </ul>
+        <div className="overflow-x-auto border-t border-line">
+          <table className="table">
+            <thead><tr><th>Participant</th><th className="text-right">Palier</th><th className="text-right">Payé</th><th className="text-right">Reste dû</th><th className="text-right">Avance</th><th>Échéances</th></tr></thead>
+            <tbody>
               {p.participants.length === 0 && (
-                <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">Aucun participant : partagez un code d&apos;invitation.</td></tr>
+                <tr><td colSpan={6}><EmptyState icon="users" title="Aucun participant">Générez un code d&apos;invitation et partagez-le.</EmptyState></td></tr>
               )}
-              {p.participants.map((x: ParticipantProjet) => (
-                <tr key={x.id}>
-                  <td className="px-6 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{x.nom}</td>
-                  <td className="px-6 py-3 text-sm tabular-nums whitespace-nowrap">{formatMontant(x.palierActuel)}</td>
-                  <td className="px-6 py-3 text-sm tabular-nums whitespace-nowrap">{formatMontant(x.totalPaye)}</td>
-                  <td className={`px-6 py-3 text-sm tabular-nums whitespace-nowrap ${x.resteDuExigible > 0 ? "text-red-700 font-semibold" : "text-gray-500"}`}>
-                    {formatMontant(x.resteDuExigible)}
-                  </td>
-                  <td className="px-6 py-3 text-sm tabular-nums whitespace-nowrap text-gray-600">{formatMontant(x.avance)}</td>
-                  <td className="px-6 py-3">
-                    <button onClick={() => setOuvert(ouvert === x.id ? null : x.id)} className="flex gap-0.5" aria-label={`Détail des échéances de ${x.nom}`}>
+              {p.participants.map((x) => (
+                <tr key={x.id} className="cursor-pointer" onClick={() => setOuvert(ouvert === x.id ? null : x.id)} aria-expanded={ouvert === x.id}>
+                  <td className="font-medium text-ink whitespace-nowrap">{x.nom}
+                    {x.palierDemande !== null && <span className="block text-[12px] text-info font-normal">demande {formatMontant(x.palierDemande)}</span>}</td>
+                  <td className="text-right num whitespace-nowrap">{formatMontant(x.palierActuel)}</td>
+                  <td className="text-right num whitespace-nowrap">{formatMontant(x.totalPaye)}</td>
+                  <td className={`text-right num whitespace-nowrap ${x.resteDuExigible > 0 ? "text-bad font-medium" : "text-muted"}`}>{formatMontant(x.resteDuExigible)}</td>
+                  <td className="text-right num whitespace-nowrap text-ink-2">{formatMontant(x.avance)}</td>
+                  <td>
+                    <div className="flex gap-[3px]">
                       {(x.echeances ?? []).map((e) => (
-                        <span key={e.numero} title={`Échéance ${e.numero} – ${new Date(e.date).toLocaleDateString("fr-FR")} : ${ECHEANCE_LABEL[e.statut]}`}
-                          className={`w-3 h-5 rounded-sm ${ECHEANCE_STYLE[e.statut]}`} />
+                        <span key={e.numero} title={`Échéance ${e.numero} · ${formatJour(e.date)} · ${formatMontant(e.paye)} / ${formatMontant(e.palier)} (${CASE_LIBELLE[e.statut]})`}
+                          className={`h-5 w-3 rounded-[3px] ${CASE[e.statut]}`} />
                       ))}
-                    </button>
+                    </div>
                     {ouvert === x.id && (
-                      <table className="mt-2 text-xs">
-                        <tbody>
-                          {(x.echeances ?? []).map((e) => (
-                            <tr key={e.numero}>
-                              <td className="pr-3 text-gray-500">n°{e.numero}</td>
-                              <td className="pr-3">{new Date(e.date).toLocaleDateString("fr-FR")}</td>
-                              <td className="pr-3 tabular-nums">{formatMontant(e.paye)} / {formatMontant(e.palier)}</td>
-                              <td className="text-gray-600">{ECHEANCE_LABEL[e.statut]}</td>
-                            </tr>
-                          ))}
-                        </tbody>
+                      <table className="mt-3 text-[12.5px]">
+                        <tbody>{(x.echeances ?? []).map((e) => (
+                          <tr key={e.numero} className="text-ink-2">
+                            <td className="pr-4 py-0.5 text-muted num">n°{e.numero}</td>
+                            <td className="pr-4 py-0.5">{formatJour(e.date)}</td>
+                            <td className="pr-4 py-0.5 num text-ink">{formatMontant(e.paye)} / {formatMontant(e.palier)}</td>
+                            <td className="py-0.5">{CASE_LIBELLE[e.statut]}</td>
+                          </tr>
+                        ))}</tbody>
                       </table>
                     )}
                   </td>
@@ -239,227 +207,144 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
-      {/* ── Paiements ────────────────────────────────────────────── */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">Paiements</h2>
+      <Card title="Paiements" subtitle={enAttente > 0 ? `${enAttente} paiement(s) attendent votre validation.` : "Enregistrez un versement reçu, puis validez-le après vérification."}>
         {p.statut !== "Ouvert" ? (
-          <p className="text-sm text-gray-500">Ouvrez le projet pour enregistrer des paiements.</p>
+          <EmptyState icon="cash" title="Projet non ouvert">Ouvrez le projet pour enregistrer des paiements.</EmptyState>
         ) : (
-          <form
-            onSubmit={async (e) => {
+          <form onSubmit={async (e) => {
               e.preventDefault();
-              const ok = await action("/paiements", { participantId: payeur, montant: Number(montant), preuve },
-                "Paiement enregistré : il est en attente de validation.");
-              if (ok) { setPayeur(""); setMontant(""); setPreuve(""); }
-            }}
-            className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
-          >
-            <label className="block text-sm">
-              <span className="text-gray-700">Participant</span>
-              <select name="payeur" value={payeur} onChange={(e) => choisirPayeur(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
-                <option value="">— Choisir —</option>
+              if (await action("/paiements", { participantId: payeur, montant: Number(montant), preuve }, "Paiement enregistré : il attend votre validation.")) {
+                setPayeur(""); setMontant(""); setPreuve("");
+              }
+            }} className="grid grid-cols-1 md:grid-cols-[1.3fr_1fr_1.2fr_auto] gap-4 items-end">
+            <div>
+              <label htmlFor="payeur" className="label">Participant</label>
+              <select id="payeur" name="payeur" value={payeur} onChange={(e) => choisirPayeur(e.target.value)} required className="input">
+                <option value="">Choisir un participant</option>
                 {p.participants.map((x) => <option key={x.id} value={x.id}>{x.nom}</option>)}
               </select>
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Montant (FCFA)</span>
-              <input name="montant" type="number" min={1} value={montant} onChange={(e) => setMontant(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-              {choisi && (
-                <span className="text-xs text-gray-500">
-                  Palier {formatMontant(choisi.palierActuel)} · reste dû {formatMontant(choisi.resteDuExigible)}
-                </span>
-              )}
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Preuve (n° de reçu…)</span>
-              <input name="preuve" value={preuve} onChange={(e) => setPreuve(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-            <button type="submit" disabled={busy}
-              className="bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white text-sm font-medium rounded-md px-4 py-2">
-              Enregistrer
-            </button>
+            </div>
+            <div>
+              <label htmlFor="montant" className="label">Montant (FCFA)</label>
+              <input id="montant" name="montant" type="number" min={1} value={montant} onChange={(e) => setMontant(e.target.value)} required className="input num" />
+            </div>
+            <div>
+              <label htmlFor="preuve" className="label">Preuve</label>
+              <input id="preuve" name="preuve" value={preuve} onChange={(e) => setPreuve(e.target.value)} required placeholder="N° du reçu…" className="input" />
+            </div>
+            <button type="submit" disabled={busy} className="btn-primary h-10"><Icon name="plus" />Enregistrer</button>
+            {choisi && <p className="hint md:col-span-4 -mt-2">Palier {formatMontant(choisi.palierActuel)} · reste dû aujourd&apos;hui {formatMontant(choisi.resteDuExigible)} · avance {formatMontant(choisi.avance)}</p>}
           </form>
         )}
 
         {aRejeter && (
-          <div className="flex flex-wrap items-end gap-3 bg-red-50 border border-red-200 rounded-md p-3">
-            <label className="block text-sm flex-1 min-w-[200px]">
-              <span className="text-gray-700">Motif du rejet (obligatoire)</span>
-              <input name="motif" value={motif} onChange={(e) => setMotif(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
+          <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-bad/30 bg-bad-soft p-3">
+            <div className="flex-1 min-w-[220px]">
+              <label htmlFor="motif" className="label">Motif du rejet ({aRejeter.nom})</label>
+              <input id="motif" name="motif" value={motif} onChange={(e) => setMotif(e.target.value)} autoFocus className="input" placeholder="Obligatoire" />
+            </div>
             <button disabled={busy || !motif.trim()} onClick={async () => {
-              const ok = await action(`/${aRejeter.type}/${aRejeter.id}/rejeter`, { motif }, "Rejeté.");
-              if (ok) { setARejeter(null); setMotif(""); }
-            }} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md px-4 py-2 disabled:opacity-50">Confirmer le rejet</button>
-            <button onClick={() => { setARejeter(null); setMotif(""); }} className="text-sm text-gray-600 px-2 py-2">Annuler</button>
+              if (await action(`/${aRejeter.type}/${aRejeter.id}/rejeter`, { motif }, "Rejeté. Le motif est inscrit au journal.")) { setARejeter(null); setMotif(""); }
+            }} className="btn-danger h-10">Confirmer le rejet</button>
+            <button onClick={() => { setARejeter(null); setMotif(""); }} className="btn-ghost h-10">Annuler</button>
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {["Participant", "Montant", "Preuve", "Statut", "Saisi le", "Actions"].map((h) => (
-                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {p.paiements.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-400">Aucun paiement.</td></tr>
-              )}
-              {p.paiements.map((x) => (
+        {p.paiements.length > 0 && (
+          <div className="overflow-x-auto mt-5 -mx-5 md:-mx-6 border-t border-line">
+            <table className="table">
+              <thead><tr><th>Participant</th><th className="text-right">Montant</th><th>Preuve</th><th>Statut</th><th>Saisi le</th><th className="text-right">Actions</th></tr></thead>
+              <tbody>{p.paiements.map((x) => (
                 <tr key={x.id}>
-                  <td className="px-4 py-2 text-sm font-medium">{x.participantNom}</td>
-                  <td className="px-4 py-2 text-sm tabular-nums">{formatMontant(x.montant)}</td>
-                  <td className="px-4 py-2 text-sm text-gray-600">{x.preuve}</td>
-                  <td className="px-4 py-2"><StatusBadge status={x.statut} /></td>
-                  <td className="px-4 py-2 text-sm text-gray-500">{formatDate(x.saisiLe)}</td>
-                  <td className="px-4 py-2 text-sm space-x-2 whitespace-nowrap">
-                    {x.statut === "en_attente" && (
-                      <>
-                        <button disabled={busy} onClick={() => action(`/paiements/${x.id}/valider`, {}, `Paiement de ${x.participantNom} validé.`)}
-                          className="text-green-700 hover:text-green-900 font-medium">Valider</button>
-                        <button disabled={busy} onClick={() => setARejeter({ type: "paiements", id: x.id })}
-                          className="text-red-600 hover:text-red-800 font-medium">Rejeter</button>
-                      </>
-                    )}
-                    {x.statut === "rejete" && x.motif && <span className="text-xs text-gray-500">{x.motif}</span>}
-                    {x.statut === "valide" && x.reference && <span className="text-xs text-gray-500 font-mono">{x.reference}</span>}
+                  <td className="font-medium text-ink">{x.participantNom}</td>
+                  <td className="text-right num">{formatMontant(x.montant)}</td>
+                  <td className="text-ink-2">{x.preuve}</td>
+                  <td><Badge status={x.statut} /></td>
+                  <td className="text-ink-2 whitespace-nowrap">{formatDate(x.saisiLe)}</td>
+                  <td className="text-right whitespace-nowrap">
+                    {x.statut === "en_attente" ? (
+                      <span className="inline-flex gap-2">
+                        <button disabled={busy} onClick={() => setARejeter({ type: "paiements", id: x.id, nom: x.participantNom })} className="btn-secondary btn-sm">Rejeter</button>
+                        <button disabled={busy} onClick={() => action(`/paiements/${x.id}/valider`, {}, `Paiement de ${x.participantNom} validé.`)} className="btn-primary btn-sm"><Icon name="check" className="h-3.5 w-3.5" />Valider</button>
+                      </span>
+                    ) : x.statut === "rejete" ? <span className="text-[12px] text-muted">{x.motif}</span>
+                      : <span className="text-[12px] text-muted font-mono">{x.reference}</span>}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {enAttente.length > 0 && <p className="text-xs text-gray-500">{enAttente.length} paiement(s) en attente de validation.</p>}
-      </div>
-
-      {/* ── Dépenses ─────────────────────────────────────────────── */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6 space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Dépenses</h2>
-          <p className="text-sm text-gray-500">Une dépense ne peut pas dépasser le solde disponible ({formatMontant(p.solde)}).</p>
-        </div>
-        {p.statut === "Ouvert" && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const ok = await action("/depenses", { libelle, montant: Number(montantDepense), justificatif },
-                "Dépense proposée : validez-la après vérification du justificatif.");
-              if (ok) { setLibelle(""); setMontantDepense(""); setJustificatif(""); }
-            }}
-            className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
-          >
-            <label className="block text-sm">
-              <span className="text-gray-700">Libellé</span>
-              <input name="libelle" value={libelle} onChange={(e) => setLibelle(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Montant (FCFA)</span>
-              <input name="montant-depense" type="number" min={1} value={montantDepense} onChange={(e) => setMontantDepense(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-            <label className="block text-sm">
-              <span className="text-gray-700">Justificatif</span>
-              <input name="justificatif" value={justificatif} onChange={(e) => setJustificatif(e.target.value)} required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-            <button type="submit" disabled={busy}
-              className="border border-green-700 text-green-800 hover:bg-green-50 disabled:opacity-50 text-sm font-medium rounded-md px-4 py-2">
-              Proposer la dépense
-            </button>
-          </form>
-        )}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {["Libellé", "Montant", "Justificatif", "Statut", "Actions"].map((h) => (
-                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {p.depenses.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-400">Aucune dépense.</td></tr>
-              )}
-              {p.depenses.map((d) => (
-                <tr key={d.id}>
-                  <td className="px-4 py-2 text-sm font-medium">{d.libelle}</td>
-                  <td className="px-4 py-2 text-sm tabular-nums">{formatMontant(d.montant)}</td>
-                  <td className="px-4 py-2 text-sm text-gray-600">{d.justificatif}</td>
-                  <td className="px-4 py-2"><StatusBadge status={d.statut} /></td>
-                  <td className="px-4 py-2 text-sm space-x-2 whitespace-nowrap">
-                    {d.statut === "en_attente" && (
-                      <>
-                        <button disabled={busy} onClick={() => action(`/depenses/${d.id}/valider`, {}, `Dépense « ${d.libelle} » validée.`)}
-                          className="text-green-700 hover:text-green-900 font-medium">Valider</button>
-                        <button disabled={busy} onClick={() => setARejeter({ type: "depenses", id: d.id })}
-                          className="text-red-600 hover:text-red-800 font-medium">Rejeter</button>
-                      </>
-                    )}
-                    {d.statut === "rejete" && d.motif && <span className="text-xs text-gray-500">{d.motif}</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {depensesEnAttente.length > 0 && <p className="text-xs text-gray-500">{depensesEnAttente.length} dépense(s) à valider.</p>}
-      </div>
-
-      {/* ── Règles ───────────────────────────────────────────────── */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6 space-y-4" data-testid="regles">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Règles du projet</h2>
-            <p className="text-sm text-gray-500">Chaque modification est inscrite au journal. Un changement de palier déjà fait garde la règle en vigueur à sa demande.</p>
-          </div>
-          {p.statut !== "Clos" && p.statut !== "Annule" && (
-            regles === null ? (
-              <button onClick={() => setRegles(p.regles)} className="border border-gray-300 hover:border-green-700 text-sm font-medium rounded-md px-4 py-2">
-                Modifier
-              </button>
-            ) : (
-              <span className="flex gap-2">
-                <button disabled={busy} onClick={async () => { if (await action("/regles", regles, "Règles enregistrées.", "PUT")) setRegles(null); }}
-                  className="bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-md px-4 py-2 disabled:opacity-50">Enregistrer</button>
-                <button onClick={() => setRegles(null)} className="text-sm text-gray-600 px-2">Annuler</button>
-              </span>
-            )
-          )}
-        </div>
-        <ReglesProjetForm value={regles ?? p.regles} onChange={setRegles} disabled={regles === null} />
-      </div>
-
-      {/* ── Journal ──────────────────────────────────────────────── */}
-      {p.journal && (
-        <details className="bg-white rounded-lg shadow border border-gray-200 p-6">
-          <summary className="cursor-pointer text-lg font-semibold text-gray-900">Journal du projet ({p.journal.length} dernières actions)</summary>
-          <div className="overflow-x-auto mt-4">
-            <table className="min-w-full text-sm">
-              <tbody className="divide-y divide-gray-100">
-                {p.journal.map((j) => (
-                  <tr key={j.sequence}>
-                    <td className="py-1.5 pr-4 text-gray-400 tabular-nums">#{j.sequence}</td>
-                    <td className="py-1.5 pr-4 whitespace-nowrap">{formatDate(j.horodatage)}</td>
-                    <td className="py-1.5 pr-4 font-medium">{j.action}</td>
-                    <td className="py-1.5 font-mono text-xs text-gray-400">{j.hash.slice(0, 16)}…</td>
-                  </tr>
-                ))}
-              </tbody>
+              ))}</tbody>
             </table>
           </div>
-        </details>
+        )}
+      </Card>
+
+      <Card title="Dépenses" subtitle={`Une dépense ne peut pas dépasser le solde disponible (${formatMontant(p.solde)}).${depensesEnAttente ? ` ${depensesEnAttente} à valider.` : ""}`}>
+        {p.statut === "Ouvert" && (
+          <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (await action("/depenses", { libelle, montant: Number(montantDepense), justificatif }, "Dépense proposée : validez-la après vérification du justificatif.")) {
+                setLibelle(""); setMontantDepense(""); setJustificatif("");
+              }
+            }} className="grid grid-cols-1 md:grid-cols-[1.3fr_1fr_1.2fr_auto] gap-4 items-end">
+            <div><label htmlFor="libelle" className="label">Libellé</label><input id="libelle" name="libelle" value={libelle} onChange={(e) => setLibelle(e.target.value)} required className="input" placeholder="Ex. : acompte moteur" /></div>
+            <div><label htmlFor="montant-depense" className="label">Montant (FCFA)</label><input id="montant-depense" name="montant-depense" type="number" min={1} value={montantDepense} onChange={(e) => setMontantDepense(e.target.value)} required className="input num" /></div>
+            <div><label htmlFor="justificatif" className="label">Justificatif</label><input id="justificatif" name="justificatif" value={justificatif} onChange={(e) => setJustificatif(e.target.value)} required className="input" placeholder="N° de facture, devis…" /></div>
+            <button type="submit" disabled={busy} className="btn-secondary h-10"><Icon name="plus" />Proposer</button>
+          </form>
+        )}
+        {p.depenses.length === 0 ? (
+          <EmptyState icon="receipt" title="Aucune dépense" />
+        ) : (
+          <div className="overflow-x-auto mt-5 -mx-5 md:-mx-6 border-t border-line">
+            <table className="table">
+              <thead><tr><th>Libellé</th><th className="text-right">Montant</th><th>Justificatif</th><th>Statut</th><th className="text-right">Actions</th></tr></thead>
+              <tbody>{p.depenses.map((d) => (
+                <tr key={d.id}>
+                  <td className="font-medium text-ink">{d.libelle}</td>
+                  <td className="text-right num">{formatMontant(d.montant)}</td>
+                  <td className="text-ink-2">{d.justificatif}</td>
+                  <td><Badge status={d.statut} /></td>
+                  <td className="text-right whitespace-nowrap">
+                    {d.statut === "en_attente" ? (
+                      <span className="inline-flex gap-2">
+                        <button disabled={busy} onClick={() => setARejeter({ type: "depenses", id: d.id, nom: d.libelle })} className="btn-secondary btn-sm">Rejeter</button>
+                        <button disabled={busy} onClick={() => action(`/depenses/${d.id}/valider`, {}, `Dépense « ${d.libelle} » validée.`)} className="btn-primary btn-sm"><Icon name="check" className="h-3.5 w-3.5" />Valider</button>
+                      </span>
+                    ) : d.statut === "rejete" ? <span className="text-[12px] text-muted">{d.motif}</span> : null}
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Règles du projet" id="regles"
+        subtitle="Chaque modification est inscrite au journal. Un changement de palier déjà fait garde la règle en vigueur au moment de sa demande."
+        actions={modifiable ? (regles === null
+          ? <button onClick={() => setRegles(p.regles)} className="btn-secondary btn-sm"><Icon name="settings" className="h-3.5 w-3.5" />Modifier</button>
+          : <span className="flex gap-2">
+              <button onClick={() => setRegles(null)} className="btn-ghost btn-sm">Annuler</button>
+              <button disabled={busy} onClick={async () => { if (await action("/regles", regles, "Règles enregistrées.", "PUT")) setRegles(null); }} className="btn-primary btn-sm">Enregistrer</button>
+            </span>) : undefined}>
+        <div data-testid="regles"><ReglesProjetForm value={regles ?? p.regles} onChange={setRegles} disabled={regles === null} /></div>
+      </Card>
+
+      {p.journal && (
+        <Card title="Journal du projet" subtitle={`${p.journal.length} dernières actions, chaînées par empreinte SHA-256.`} bodyClassName="pt-2">
+          <ol className="divide-y divide-line">
+            {p.journal.slice(0, 12).map((j) => (
+              <li key={j.sequence} className="flex items-center gap-4 px-5 md:px-6 py-2.5 text-[13px]">
+                <span className="w-10 text-muted num">#{j.sequence}</span>
+                <span className="flex-1 text-ink">{libelleAction(j.action)}</span>
+                <span className="hidden md:inline font-mono text-[12px] text-muted">{j.hash.slice(0, 12)}…</span>
+                <time className="text-muted whitespace-nowrap">{formatDate(j.horodatage)}</time>
+              </li>
+            ))}
+          </ol>
+        </Card>
       )}
-    </div>
+    </>
   );
 }
