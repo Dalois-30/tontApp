@@ -33,19 +33,20 @@ token() { post -X POST "$API/auth/login" -d "{\"telephone\":\"$1\",\"motDePasse\
 seed() {
   curl -sf "${API%/api/v1}/health" >/dev/null || { echo "API injoignable : lancez 'make api'"; exit 1; }
   echo "Comptes (mot de passe : $PASSWORD)" >&2
-  compte +22670000001 "Admin TontApp"    Admin
-  compte +22670000002 "Awa Traore"       Gestionnaire
-  compte +22670000003 "Ibrahim Sawadogo" Membre
-  compte +22670000004 "Mariam Kabore"    Membre
-  compte +22670000005 "Seydou Ouedraogo" Membre
+  compte +237670000001 "Admin TontApp"    Admin
+  compte +237670000002 "Awa Traore"       Gestionnaire
+  compte +237670000003 "Ibrahim Sawadogo" Membre
+  compte +237670000004 "Mariam Kabore"    Membre
+  compte +237670000005 "Seydou Ouedraogo" Membre
+  compte +237670000011 "Ousmane Zongo"    Membre
 
-  local g; g=$(token +22670000002)
+  local g; g=$(token +237670000002)
   local t; t=$(psql_c "select id from tontines where nom='Tontine du Marche' limit 1")
   if [ -z "$t" ]; then
     t=$(post -X POST "$API/tontines" -H "Authorization: Bearer $g" \
       -d '{"name":"Tontine du Marche","description":"Epargne mensuelle des commercantes du marche central","contributionAmount":10000,"periodicity":"Monthly","maxMembers":6}' | json '["id"]')
     local code; code=$(curl -sf "$API/tontines/$t/invitation/generer?nombreUsagesMax=10&expirationJours=30" -H "Authorization: Bearer $g" | json '["code"]')
-    for tel in +22670000003 +22670000004 +22670000005; do
+    for tel in +237670000003 +237670000004 +237670000005; do
       local nom; nom=$(psql_c "select nom from utilisateurs where telephone='$tel'")
       post -X POST "$API/tontines/rejoindre" -H "Authorization: Bearer $(token $tel)" \
         -d "{\"code\":\"$code\",\"memberName\":\"$nom\"}" >/dev/null
@@ -54,6 +55,11 @@ seed() {
     echo "Code d'invitation (10 usages, 30 jours) : $code"
   else
     echo "Tontine de démo déjà présente : $t" >&2
+  fi
+
+  # Optional: collective project imported from a contributions workbook.
+  if [ -n "${DEMO_CLASSEUR:-}" ]; then
+    python3 -I scripts/import_classeur.py "$DEMO_CLASSEUR" --api "$API"
   fi
 }
 

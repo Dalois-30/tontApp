@@ -97,7 +97,7 @@ public class Notification : AggregateRoot<NotificationId>
 
         if (canal == Canal.SMS && !E164Regex.IsMatch(destinataireId))
             throw new ArgumentException(
-                "Le numéro de téléphone doit être au format E.164 (ex: +22670000000).",
+                "Le numéro de téléphone doit être au format E.164 (ex: +237670000000).",
                 nameof(destinataireId));
 
         if (string.IsNullOrWhiteSpace(contenu))

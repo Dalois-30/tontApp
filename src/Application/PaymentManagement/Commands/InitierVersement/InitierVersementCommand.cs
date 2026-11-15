@@ -8,4 +8,4 @@ public sealed record InitierVersementCommand(
     Guid PayeurId,
     string NumeroTelephone,
     decimal Montant,
-    string Devise = "XOF") : ICommand<Guid>;
+    string Devise = Domain.Common.Devises.ParDefaut) : ICommand<Guid>;

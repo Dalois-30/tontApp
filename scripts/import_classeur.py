@@ -12,7 +12,7 @@ comme participants sans compte et importe chaque paiement à sa date, déjà val
 
 Usage :
   python3 scripts/import_classeur.py CLASSEUR.xlsx [--unite 1000] [--api http://localhost:5243/api/v1]
-         [--tel +22670000002] [--mdp Demo2026!] [--dry-run]
+         [--tel +237670000002] [--mdp Demo2026!] [--dry-run]
 
 --unite : facteur appliqué aux montants du classeur (1000 si « 15 » signifie 15 000 FCFA).
 """
@@ -128,7 +128,7 @@ def main():
     ap.add_argument("classeur")
     ap.add_argument("--unite", type=float, default=1000)
     ap.add_argument("--api", default="http://localhost:5243/api/v1")
-    ap.add_argument("--tel", default="+22670000002")
+    ap.add_argument("--tel", default="+237670000002")
     ap.add_argument("--mdp", default="Demo2026!")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()

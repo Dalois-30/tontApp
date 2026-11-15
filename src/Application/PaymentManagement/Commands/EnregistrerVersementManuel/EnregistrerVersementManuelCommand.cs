@@ -8,5 +8,5 @@ public sealed record EnregistrerVersementManuelCommand(
     Guid MembreId,
     decimal Montant,
     string DescriptionPreuve,
-    string Devise = "XOF",
+    string Devise = Domain.Common.Devises.ParDefaut,
     Guid? ActeurId = null) : ICommand<Result<Guid>>;

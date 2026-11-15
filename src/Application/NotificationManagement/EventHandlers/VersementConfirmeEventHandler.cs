@@ -37,7 +37,7 @@ public sealed class VersementConfirmeEventHandler : INotificationHandler<Verseme
         var tontine = await _tontineRepository.GetByIdReadOnlyAsync(notification.TontineId, cancellationToken);
         var nomTontine = tontine?.Name ?? "votre tontine";
 
-        var message = SmsTemplate.VersementConfirme(notification.Montant, "XOF", nomTontine, notification.ReferenceExterne);
+        var message = SmsTemplate.VersementConfirme(notification.Montant, Domain.Common.Devises.ParDefaut, nomTontine, notification.ReferenceExterne);
 
         await _notificationService.PlanifierNotificationAsync(
             notification.PayeurId.Value.ToString(),

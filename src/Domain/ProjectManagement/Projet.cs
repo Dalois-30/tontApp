@@ -24,7 +24,7 @@ public sealed class Projet : AggregateRoot<ProjetId>
     public string Nom { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public decimal Objectif { get; private set; }
-    public string Devise { get; private set; } = "XOF";
+    public string Devise { get; private set; } = Domain.Common.Devises.ParDefaut;
     public TontinePeriodicity Periodicite { get; private set; }
     public DateTime DateDebut { get; private set; }
     public int NombreEcheances { get; private set; }

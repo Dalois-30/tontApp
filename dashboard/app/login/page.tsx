@@ -8,7 +8,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl");
-  const [telephone, setTelephone] = useState("+226");
+  const [telephone, setTelephone] = useState("+237");
   const [motDePasse, setMotDePasse] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

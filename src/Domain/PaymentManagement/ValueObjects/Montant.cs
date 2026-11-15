@@ -19,7 +19,7 @@ public sealed class Montant : ValueObject
         Devise = devise;
     }
 
-    public static Montant Create(decimal valeur, string devise = "XOF")
+    public static Montant Create(decimal valeur, string devise = Domain.Common.Devises.ParDefaut)
     {
         if (valeur < MontantMinimum)
             throw new ArgumentException($"Le montant minimum est {MontantMinimum} {devise}.", nameof(valeur));

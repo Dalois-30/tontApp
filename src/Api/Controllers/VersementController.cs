@@ -208,7 +208,7 @@ public class VersementController : ControllerBase
             membreId,
             request.NumeroTelephone,
             request.Montant,
-            request.Devise ?? "XOF");
+            request.Devise ?? Domain.Common.Devises.ParDefaut);
 
         var versementId = await _mediator.Send(command, cancellationToken);
         return Ok(new { versementId });

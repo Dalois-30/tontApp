@@ -22,7 +22,7 @@ public sealed class PlanAbonnement : Entity<PlanAbonnementId>
     {
         Nom = string.Empty;
         Code = string.Empty;
-        Devise = "XOF";
+        Devise = Domain.Common.Devises.ParDefaut;
     }
 
     private PlanAbonnement(

@@ -12,7 +12,7 @@ public class AbonnementTests
         var abonnement = Abonnement.Create("gestionnaire-1", PlanTarifaire.Pro);
 
         Assert.Equal(2000m, abonnement.MontantMensuel);
-        Assert.Equal("XOF", abonnement.Currency);
+        Assert.Equal(Domain.Common.Devises.ParDefaut, abonnement.Currency);
         Assert.Equal(PlanTarifaire.Pro, abonnement.Plan);
         Assert.Equal(StatutAbonnement.Actif, abonnement.Statut);
     }

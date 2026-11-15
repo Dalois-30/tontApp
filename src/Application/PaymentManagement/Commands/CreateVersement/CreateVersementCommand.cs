@@ -7,4 +7,4 @@ public sealed record CreateVersementCommand(
     Guid PayeurId,
     Guid TourId,
     decimal Montant,
-    string Devise = "XOF") : ICommand<Guid>;
+    string Devise = Domain.Common.Devises.ParDefaut) : ICommand<Guid>;

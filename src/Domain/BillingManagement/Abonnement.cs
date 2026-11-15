@@ -29,7 +29,7 @@ public sealed class Abonnement : AggregateRoot<AbonnementId>
     {
         GestionnaireId = string.Empty;
         PlanId = default!;
-        Currency = "XOF";
+        Currency = Domain.Common.Devises.ParDefaut;
     }
 
     private Abonnement(
@@ -80,7 +80,7 @@ public sealed class Abonnement : AggregateRoot<AbonnementId>
             PlanAbonnementId.From(planId),
             plan,
             montant,
-            "XOF",
+            Domain.Common.Devises.ParDefaut,
             now,
             dateFin,
             renouvellementAuto: plan != PlanTarifaire.Gratuit);
@@ -114,7 +114,7 @@ public sealed class Abonnement : AggregateRoot<AbonnementId>
             planId,
             plan,
             montantMensuel,
-            "XOF",
+            Domain.Common.Devises.ParDefaut,
             now,
             dateFin,
             renouvellementAuto: plan != PlanTarifaire.Gratuit)

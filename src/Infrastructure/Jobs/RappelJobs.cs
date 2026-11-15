@@ -44,7 +44,7 @@ public sealed class RappelJ3Job
                 if (round.DateLimite.Date == targetDate && !round.IsCompleted)
                 {
                     var montant = tontine.ContributionAmount?.Amount ?? 0;
-                    var devise = tontine.ContributionAmount?.Currency ?? "XOF";
+                    var devise = tontine.ContributionAmount?.Currency ?? Domain.Common.Devises.ParDefaut;
                     var message = SmsTemplate.RappelJ3(tontine.Name, montant, devise);
 
                     var members = tontine.GetActiveMembers();
@@ -108,7 +108,7 @@ public sealed class RappelJ1Job
                 if (round.DateLimite.Date == targetDate && !round.IsCompleted)
                 {
                     var montant = tontine.ContributionAmount?.Amount ?? 0;
-                    var devise = tontine.ContributionAmount?.Currency ?? "XOF";
+                    var devise = tontine.ContributionAmount?.Currency ?? Domain.Common.Devises.ParDefaut;
                     var message = SmsTemplate.RappelJ1(tontine.Name, montant, devise);
 
                     var members = tontine.GetActiveMembers();

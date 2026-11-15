@@ -23,7 +23,7 @@ public sealed partial class TelephoneId : ValueObject
 
         if (!E164Regex.IsMatch(normalized))
             throw new ArgumentException(
-                "Telephone must be in E.164 format (e.g. +22670000000).", nameof(telephone));
+                "Telephone must be in E.164 format (e.g. +237670000000).", nameof(telephone));
 
         return new TelephoneId(normalized);
     }

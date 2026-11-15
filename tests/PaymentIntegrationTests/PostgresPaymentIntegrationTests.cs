@@ -76,7 +76,7 @@ public class PostgresPaymentIntegrationTests : IAsyncLifetime
         retrieved.Should().NotBeNull();
         retrieved!.Id.Should().Be(versement.Id);
         retrieved.Montant.Valeur.Should().Be(500m);
-        retrieved.Montant.Devise.Should().Be("XOF");
+        retrieved.Montant.Devise.Should().Be(Domain.Common.Devises.ParDefaut);
         retrieved.Statut.Should().Be(VersementStatus.EnAttente);
     }
 

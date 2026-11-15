@@ -3,7 +3,7 @@
  *
  * Validates:
  * - Name: 2-100 characters
- * - Phone number: E.164 format (+226XXXXXXXX for Burkina Faso)
+ * - Phone number: E.164 format (+2376XXXXXXXX for Cameroon)
  * - Password: minimum 8 characters, at least one uppercase, one digit
  * - Password confirmation: must match
  *
@@ -44,7 +44,7 @@ const registerSchema = z
       .min(1, 'Le numéro de téléphone est requis.')
       .regex(
         /^\+\d{1,15}$/,
-        'Format invalide. Utilisez le format international (ex: +22670000000).',
+        'Format invalide. Utilisez le format international (ex: +237670000000).',
       ),
     motDePasse: z
       .string()
@@ -67,7 +67,7 @@ export function RegisterScreen({ navigation }: Props): React.JSX.Element {
   const { register, isLoading, error, clearError } = useAuth();
 
   const [nom, setNom] = useState('');
-  const [telephone, setTelephone] = useState('+226');
+  const [telephone, setTelephone] = useState('+237');
   const [motDePasse, setMotDePasse] = useState('');
   const [confirmMotDePasse, setConfirmMotDePasse] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -144,7 +144,7 @@ export function RegisterScreen({ navigation }: Props): React.JSX.Element {
           error={fieldErrors.telephone}
           keyboardType="phone-pad"
           textContentType="telephoneNumber"
-          placeholder="+22670000000"
+          placeholder="+237670000000"
           editable={!isLoading}
         />
 

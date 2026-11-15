@@ -28,7 +28,7 @@ public sealed class CreateTontineCommandHandler : ICommandHandler<CreateTontineC
     public async Task<Guid> Handle(CreateTontineCommand request, CancellationToken cancellationToken)
     {
         var periodicity = Enum.Parse<TontinePeriodicity>(request.Periodicity, ignoreCase: true);
-        var contributionAmount = ContributionAmount.Create(request.ContributionAmount, "XOF");
+        var contributionAmount = ContributionAmount.Create(request.ContributionAmount, Domain.Common.Devises.ParDefaut);
         var gestionnaireId = UtilisateurId.From(request.GestionnaireId);
 
         var tontine = Tontine.Create(
