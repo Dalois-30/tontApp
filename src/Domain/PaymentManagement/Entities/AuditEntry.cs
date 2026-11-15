@@ -67,7 +67,7 @@ public class AuditEntry : Entity<AuditEntryId>
         string hashPrecedent)
     {
         var id = AuditEntryId.Create();
-        var timestamp = DateTime.UtcNow;
+        var timestamp = Horloge.MaintenantUtc();
         var hashCourant = ComputeHash(id, action, acteurId, timestamp, payload, hashPrecedent);
 
         return new AuditEntry(id, tontineId, versementId, action, acteurId, timestamp, payload, hashPrecedent, hashCourant);

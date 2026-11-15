@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 internal sealed class VersementRepository : IVersementRepository
 {
-    private const string AuditTrailNavigation = "_auditTrail";
+    private const string AuditTrailNavigation = nameof(Versement.AuditTrail);
     private readonly TontineDbContext _dbContext;
 
     public VersementRepository(TontineDbContext dbContext)

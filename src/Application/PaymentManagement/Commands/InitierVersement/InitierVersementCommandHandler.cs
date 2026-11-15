@@ -1,5 +1,6 @@
 namespace Application.PaymentManagement.Commands.InitierVersement;
 
+using Application.PaymentManagement.Services;
 using Application.Common;
 using Domain.Common;
 using Domain.PaymentManagement;
@@ -13,15 +14,18 @@ public sealed class InitierVersementCommandHandler : ICommandHandler<InitierVers
     private readonly IVersementRepository _versementRepository;
     private readonly IMobileMoneyGateway _mobileMoneyGateway;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IAuditTrailService _auditTrailService;
 
     public InitierVersementCommandHandler(
         IVersementRepository versementRepository,
         IMobileMoneyGateway mobileMoneyGateway,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IAuditTrailService auditTrailService)
     {
         _versementRepository = versementRepository;
         _mobileMoneyGateway = mobileMoneyGateway;
         _unitOfWork = unitOfWork;
+        _auditTrailService = auditTrailService;
     }
 
     public async Task<Guid> Handle(InitierVersementCommand request, CancellationToken cancellationToken)
@@ -38,7 +42,8 @@ public sealed class InitierVersementCommandHandler : ICommandHandler<InitierVers
             TourId.From(request.TourId),
             PayeurId.From(request.PayeurId),
             montant,
-            hashPrecedent);
+            hashPrecedent,
+            await _auditTrailService.GetDernierHash(TontineId.From(request.TontineId), cancellationToken));
 
         await _versementRepository.AddAsync(versement, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

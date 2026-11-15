@@ -154,7 +154,7 @@ internal sealed class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEn
 
         builder.Property(e => e.Payload)
             .HasColumnName("payload")
-            .HasColumnType("jsonb")
+            .HasColumnType("text") // not jsonb: the hash is computed on the exact payload string
             .IsRequired();
 
         builder.Property(e => e.HashPrecedent)

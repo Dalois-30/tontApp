@@ -3,6 +3,7 @@ namespace PaymentIntegrationTests;
 using Application.PaymentManagement.Commands.ConfirmVersement;
 using Application.PaymentManagement.Commands.InitierVersement;
 using Application.PaymentManagement.Commands.RejeterVersement;
+using Application.PaymentManagement.Services;
 using Domain.Common;
 using Domain.PaymentManagement;
 using Domain.PaymentManagement.Entities;
@@ -21,12 +22,17 @@ public class PaymentFlowIntegrationTests
     private readonly Mock<IVersementRepository> _versementRepoMock;
     private readonly Mock<IMobileMoneyGateway> _gatewayMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IAuditTrailService> _auditMock;
 
     public PaymentFlowIntegrationTests()
     {
         _versementRepoMock = new Mock<IVersementRepository>();
         _gatewayMock = new Mock<IMobileMoneyGateway>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _auditMock = new Mock<IAuditTrailService>();
+        _auditMock
+            .Setup(a => a.GetDernierHash(It.IsAny<TontineId>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(AuditEntry.GenesisHash);
     }
 
     [Fact]
@@ -48,7 +54,8 @@ public class PaymentFlowIntegrationTests
         var handler = new InitierVersementCommandHandler(
             _versementRepoMock.Object,
             _gatewayMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _auditMock.Object);
 
         var command = new InitierVersementCommand(
             TontineId: Guid.NewGuid(),
@@ -108,7 +115,8 @@ public class PaymentFlowIntegrationTests
         var handler = new InitierVersementCommandHandler(
             _versementRepoMock.Object,
             _gatewayMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _auditMock.Object);
 
         var command = new InitierVersementCommand(
             TontineId: tontineId.Value,
@@ -151,7 +159,8 @@ public class PaymentFlowIntegrationTests
 
         var handler = new ConfirmVersementCommandHandler(
             _versementRepoMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _auditMock.Object);
 
         var command = new ConfirmVersementCommand(versement.Id.Value, "TXN-ORANGE-123");
 
@@ -183,7 +192,8 @@ public class PaymentFlowIntegrationTests
 
         var handler = new RejeterVersementCommandHandler(
             _versementRepoMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _auditMock.Object);
 
         var command = new RejeterVersementCommand(versement.Id.Value, "Insufficient funds");
 
@@ -215,7 +225,8 @@ public class PaymentFlowIntegrationTests
 
         var handler = new ConfirmVersementCommandHandler(
             _versementRepoMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _auditMock.Object);
 
         var command = new ConfirmVersementCommand(versement.Id.Value, "TXN-DUPLICATE");
 
@@ -248,7 +259,8 @@ public class PaymentFlowIntegrationTests
 
         var handler = new RejeterVersementCommandHandler(
             _versementRepoMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _auditMock.Object);
 
         var command = new RejeterVersementCommand(versement.Id.Value, "Second failure");
 
@@ -267,7 +279,8 @@ public class PaymentFlowIntegrationTests
 
         var handler = new ConfirmVersementCommandHandler(
             _versementRepoMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _auditMock.Object);
 
         var command = new ConfirmVersementCommand(Guid.NewGuid(), "TXN-UNKNOWN");
 
