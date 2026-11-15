@@ -196,4 +196,56 @@ public class ProjetTests
             ["ProjetCree", "CodeInvitationGenere", "ParticipantAjoute", "ProjetOuvert", "PaiementSaisi", "PaiementValide"],
             p.Journal.OrderBy(e => e.Sequence).Select(e => e.Action).ToArray());
     }
+
+    // ── Un changement de palier ne vaut qu'à partir de sa prise d'effet ──
+
+    [Fact]
+    public void Decrease_DoesNotRedistributeMoneyAlreadyReceived()
+    {
+        // Palier 20 000, 50 000 payés le 5 janvier : échéances 1 et 2 soldées, 3 entamée (10 000 / 20 000).
+        var (p, id) = AvecParticipant(20_000m);
+        Payer(p, id, 50_000m);
+
+        // Baisse à 10 000 demandée et approuvée en février.
+        p.ChangerPalier(id, 10_000m, "mariam", new DateTime(2026, 2, 10));
+        p.DeciderBaissePalier(id, true, G, new DateTime(2026, 2, 12));
+
+        var s = p.Situation(id, new DateTime(2026, 2, 12));
+
+        Assert.Equal([20_000m, 20_000m, 20_000m, 10_000m, 10_000m, 10_000m], s.Echeances.Select(e => e.Palier));
+        Assert.Equal(StatutEcheance.Partielle, s.Echeances[2].Statut); // still owes 10 000 on instalment 3
+        Assert.Equal(10_000m, s.Echeances[2].Reste);
+        Assert.Equal(0m, s.Echeances[3].Paye);                         // nothing spread to instalment 4
+        Assert.Equal(10_000m, s.PalierActuel);
+    }
+
+    [Fact]
+    public void PaymentAfterDecrease_SettlesTheOldGapFirst_ThenUsesTheNewTier()
+    {
+        var (p, id) = AvecParticipant(20_000m);
+        Payer(p, id, 50_000m);
+        p.ChangerPalier(id, 10_000m, "mariam", new DateTime(2026, 2, 10));
+        p.DeciderBaissePalier(id, true, G, new DateTime(2026, 2, 12));
+
+        var paiement = p.EnregistrerPaiement(id, 20_000m, "reçu", G, new DateTime(2026, 3, 1));
+        p.DeciderPaiement(paiement.Id, true, G, "CASH-2", new DateTime(2026, 3, 1));
+
+        var s = p.Situation(id, new DateTime(2026, 3, 1));
+        Assert.Equal(StatutEcheance.Soldee, s.Echeances[2].Statut);   // gap of instalment 3 settled (20 000)
+        Assert.Equal(10_000m, s.Echeances[3].Paye);                   // then 10 000 at the new tier
+        Assert.Equal(StatutEcheance.Soldee, s.Echeances[3].Statut);
+    }
+
+    [Fact]
+    public void Raise_DoesNotIncreaseInstalmentsAlreadyPaid()
+    {
+        var (p, id) = AvecParticipant(10_000m);
+        Payer(p, id, 30_000m); // instalments 1-3 paid at 10 000 on 5 Jan
+
+        p.ChangerPalier(id, 20_000m, "awa", new DateTime(2026, 1, 20)); // from 5 Feb
+
+        var s = p.Situation(id, new DateTime(2026, 1, 20));
+        Assert.Equal([10_000m, 10_000m, 10_000m, 20_000m, 20_000m, 20_000m], s.Echeances.Select(e => e.Palier));
+        Assert.All(s.Echeances.Take(3), e => Assert.Equal(StatutEcheance.Soldee, e.Statut));
+    }
 }

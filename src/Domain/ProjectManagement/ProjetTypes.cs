@@ -43,13 +43,16 @@ public sealed class Participant : Entity<Guid>
         UtilisateurId = utilisateurId;
         DateAdhesion = maintenant;
         // The initial commitment applies to every instalment the participant owes.
-        _changements.Add(new ChangementPalier(palier, DateTime.MinValue, StatutChangementPalier.Applique, maintenant));
+        _changements.Add(new ChangementPalier(palier, DateTime.MinValue, StatutChangementPalier.Applique, maintenant, maintenant));
     }
 
-    /// <summary>Tier in force for an instalment due on <paramref name="date"/>.</summary>
-    public decimal PalierAu(DateTime date) => _changements
-        .Where(c => c.Statut == StatutChangementPalier.Applique && c.ApplicableDes <= date)
-        .OrderBy(c => c.ApplicableDes).ThenBy(c => c.DemandeLe)
+    /// <summary>
+    /// Tier of an instalment due on <paramref name="date"/>, as known at instant <paramref name="au"/>:
+    /// only changes that had taken effect by then count. A change never reaches back before it took effect.
+    /// </summary>
+    public decimal PalierAu(DateTime date, DateTime au) => _changements
+        .Where(c => c.Statut == StatutChangementPalier.Applique && c.ApplicableDes <= date && c.EffectifLe <= au)
+        .OrderBy(c => c.EffectifLe).ThenBy(c => c.ApplicableDes)
         .Last().Palier;
 
     public ChangementPalier? BaisseEnAttente => _changements.FirstOrDefault(c => c.Statut == StatutChangementPalier.EnAttente);
@@ -57,7 +60,7 @@ public sealed class Participant : Entity<Guid>
     internal void AjouterChangement(ChangementPalier c)
     {
         if (c.Statut == StatutChangementPalier.EnAttente)
-            BaisseEnAttente?.Decider(false); // a new decrease request replaces the previous one
+            BaisseEnAttente?.Decider(false, c.DemandeLe); // a new decrease request replaces the previous one
         _changements.Add(c);
     }
 }
@@ -69,23 +72,32 @@ public sealed class ChangementPalier : Entity<Guid>
     public DateTime ApplicableDes { get; private set; }
     public StatutChangementPalier Statut { get; private set; }
     public DateTime DemandeLe { get; private set; }
+    /// <summary>
+    /// Instant the change took effect (raise: when requested; decrease: when approved). Money received
+    /// before that instant keeps the allocation it had; null while pending or refused.
+    /// </summary>
+    public DateTime? EffectifLe { get; private set; }
 
     private ChangementPalier() { }
 
-    internal ChangementPalier(decimal palier, DateTime applicableDes, StatutChangementPalier statut, DateTime demandeLe) : base(Guid.NewGuid())
+    internal ChangementPalier(decimal palier, DateTime applicableDes, StatutChangementPalier statut, DateTime demandeLe,
+        DateTime? effectifLe = null) : base(Guid.NewGuid())
     {
         Palier = palier;
         ApplicableDes = applicableDes;
         Statut = statut;
         DemandeLe = demandeLe;
+        EffectifLe = statut == StatutChangementPalier.Applique ? effectifLe ?? demandeLe : null;
     }
 
-    internal void Decider(bool approuve, DateTime? applicableDes = null)
+    internal void Decider(bool approuve, DateTime maintenant, DateTime? applicableDes = null)
     {
         if (Statut != StatutChangementPalier.EnAttente)
             throw new InvalidOperationException("Only a pending tier change can be decided.");
         Statut = approuve ? StatutChangementPalier.Applique : StatutChangementPalier.Refuse;
-        if (approuve && applicableDes is { } d) ApplicableDes = d;
+        if (!approuve) return;
+        EffectifLe = maintenant;
+        if (applicableDes is { } d) ApplicableDes = d;
     }
 }
 

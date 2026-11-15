@@ -156,7 +156,7 @@ public sealed class Projet : AggregateRoot<ProjetId>
         var p = Participant(participantId);
         if (!_paliers.Contains(nouveau)) throw new InvalidOperationException("This tier is not offered by the project.");
         var prochaine = ProchaineEcheance(maintenant);
-        var actuel = p.PalierAu(prochaine);
+        var actuel = p.PalierAu(prochaine, maintenant);
         if (nouveau == actuel) throw new InvalidOperationException("This is already the participant's tier.");
 
         var hausse = nouveau > actuel;
@@ -173,7 +173,7 @@ public sealed class Projet : AggregateRoot<ProjetId>
             ?? throw new InvalidOperationException("No pending tier decrease for this participant.");
         // An approval that comes late applies from the next instalment still to come.
         DateTime? applicable = approuver && demande.ApplicableDes <= maintenant.Date ? ProchaineEcheance(maintenant) : null;
-        demande.Decider(approuver, applicable);
+        demande.Decider(approuver, maintenant, applicable);
         Journaliser(approuver ? "BaissePalierApprouvee" : "BaissePalierRefusee", acteur,
             new { ParticipantId = participantId, demande.Palier, demande.ApplicableDes });
     }
@@ -243,26 +243,50 @@ public sealed class Projet : AggregateRoot<ProjetId>
             .Where(e => e.Date >= p.DateAdhesion.Date)
             .ToList();
 
-        var totalPaye = _paiements.Where(x => x.ParticipantId == participantId && x.Statut == StatutOperation.Validee).Sum(x => x.Montant);
-        var aRepartir = totalPaye;
-        var echeances = new List<EcheanceSituation>();
-        foreach (var (numero, date) in dues)
+        // Validated payments are replayed in validation order. Each one fills the oldest instalments
+        // with the tier known at that instant; once an instalment has received money its amount is
+        // locked, so a later tier change never redistributes money already received.
+        var paiements = _paiements
+            .Where(x => x.ParticipantId == participantId && x.Statut == StatutOperation.Validee)
+            .OrderBy(x => x.DecideLe ?? x.SaisiLe)
+            .ToList();
+        var totalPaye = paiements.Sum(x => x.Montant);
+        var du = new decimal?[dues.Count];   // locked amount due per instalment
+        var paye = new decimal[dues.Count];
+        decimal credit = 0;
+        foreach (var paiement in paiements)
         {
-            var palier = p.PalierAu(date);
-            var paye = Math.Min(palier, aRepartir);
-            aRepartir -= paye;
-            var reste = palier - paye;
-            var statut = reste == 0 ? StatutEcheance.Soldee
-                : paye > 0 ? StatutEcheance.Partielle
+            var instant = paiement.DecideLe ?? paiement.SaisiLe;
+            var reste = paiement.Montant;
+            for (var i = 0; i < dues.Count && reste > 0; i++)
+            {
+                du[i] ??= p.PalierAu(dues[i].Date, instant);
+                var part = Math.Min(du[i]!.Value - paye[i], reste);
+                if (part <= 0) continue;
+                paye[i] += part;
+                reste -= part;
+            }
+            credit += reste;
+        }
+
+        var echeances = new List<EcheanceSituation>();
+        for (var i = 0; i < dues.Count; i++)
+        {
+            var (numero, date) = dues[i];
+            var palier = du[i] ?? p.PalierAu(date, maintenant);
+            var restant = palier - paye[i];
+            var statut = restant <= 0 ? StatutEcheance.Soldee
+                : paye[i] > 0 ? StatutEcheance.Partielle
                 : date <= aujourdhui ? StatutEcheance.EnRetard
                 : StatutEcheance.AVenir;
-            echeances.Add(new EcheanceSituation(numero, date, palier, paye, reste, statut));
+            echeances.Add(new EcheanceSituation(numero, date, palier, paye[i], Math.Max(0, restant), statut));
         }
+        var aRepartir = credit;
 
         var exigible = echeances.Where(e => e.Date <= aujourdhui).Sum(e => e.Reste);
         var avance = echeances.Where(e => e.Date > aujourdhui).Sum(e => e.Paye) + aRepartir;
         var prochaine = Echeancier().FirstOrDefault(d => d > aujourdhui);
-        var palierActuel = p.PalierAu(prochaine == default ? aujourdhui : prochaine);
+        var palierActuel = p.PalierAu(prochaine == default ? aujourdhui : prochaine, maintenant);
 
         return new SituationParticipant(participantId, p.Nom, palierActuel, p.BaisseEnAttente?.Palier, totalPaye,
             echeances.Sum(e => e.Palier), exigible, avance, echeances);

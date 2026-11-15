@@ -81,6 +81,7 @@ internal sealed class ChangementPalierConfiguration : IEntityTypeConfiguration<C
         b.Property(c => c.Statut).HasColumnName("statut").HasMaxLength(20)
             .HasConversion(v => v.ToString(), v => Enum.Parse<StatutChangementPalier>(v));
         b.Property(c => c.DemandeLe).HasColumnName("demande_le");
+        b.Property(c => c.EffectifLe).HasColumnName("effectif_le");
     }
 }
 

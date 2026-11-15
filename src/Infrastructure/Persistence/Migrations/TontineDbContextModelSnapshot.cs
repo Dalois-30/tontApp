@@ -536,6 +536,10 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("demande_le");
 
+                    b.Property<DateTime?>("EffectifLe")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("effectif_le");
+
                     b.Property<decimal>("Palier")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
