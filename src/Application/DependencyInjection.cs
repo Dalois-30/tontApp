@@ -23,6 +23,7 @@ public static class DependencyInjection
 
         services.AddScoped<ITontineAccessService, TontineAccessService>();
         services.AddScoped<IDashboardReadService, DashboardReadService>();
+        services.AddScoped<Application.ProjectManagement.ProjetService>();
 
         return services;
     }
