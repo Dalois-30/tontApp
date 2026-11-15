@@ -4,4 +4,5 @@ using Application.Common;
 
 public sealed record ConfirmVersementCommand(
     Guid VersementId,
-    string ReferenceExterne) : ICommand;
+    string ReferenceExterne,
+    string ActeurId = "system") : ICommand;

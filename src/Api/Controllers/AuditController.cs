@@ -2,6 +2,8 @@ namespace Api.Controllers;
 
 using Application.PaymentManagement.Queries.GetAuditEntries;
 using Application.PaymentManagement.Queries.VerifierAudit;
+using Api.Security;
+using Application.TontineManagement.Services;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,6 +36,7 @@ public class AuditController : ControllerBase
     /// <response code="200">Audit entries returned.</response>
     [HttpGet("{id:guid}/audit")]
     [ProducesResponseType(typeof(AuditEntriesResult), StatusCodes.Status200OK)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> GetAuditEntries(
         Guid id,
         [FromQuery] int page = 1,
@@ -59,6 +62,7 @@ public class AuditController : ControllerBase
     /// <response code="200">Audit verification completed.</response>
     [HttpGet("{id:guid}/audit/verifier")]
     [ProducesResponseType(typeof(AuditVerificationResult), StatusCodes.Status200OK)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> VerifierAudit(Guid id, CancellationToken cancellationToken)
     {
         var query = new VerifierAuditQuery(id);

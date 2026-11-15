@@ -427,7 +427,7 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("jsonb")
+                        .HasColumnType("text")
                         .HasColumnName("payload");
 
                     b.Property<DateTime>("Timestamp")

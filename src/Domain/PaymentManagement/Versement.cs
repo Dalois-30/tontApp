@@ -49,7 +49,7 @@ public class Versement : AggregateRoot<VersementId>
         Montant = montant;
         Statut = VersementStatus.EnAttente;
         HashPrecedent = hashPrecedent;
-        CreatedAt = DateTime.UtcNow;
+        CreatedAt = Horloge.MaintenantUtc();
         HashCourant = CalculerHash(id, montant, CreatedAt, hashPrecedent);
     }
 
@@ -90,7 +90,7 @@ public class Versement : AggregateRoot<VersementId>
         return versement;
     }
 
-    public void Confirmer(string referenceExterne, string? hashPrecedentAudit = null)
+    public void Confirmer(string referenceExterne, string? hashPrecedentAudit = null, string acteurId = "system")
     {
         if (Statut != VersementStatus.EnAttente)
             throw new InvalidOperationException("Only a pending versement can be confirmed.");
@@ -101,7 +101,7 @@ public class Versement : AggregateRoot<VersementId>
 
         var payload = JsonSerializer.Serialize(new { ReferenceExterne = referenceExterne });
         var auditHash = hashPrecedentAudit ?? GetLastAuditHash();
-        AddAuditEntry("system", AuditAction.VersementConfirme, payload, auditHash);
+        AddAuditEntry(acteurId, AuditAction.VersementConfirme, payload, auditHash);
 
         AddDomainEvent(new VersementConfirmedEvent(
             Id,
@@ -112,7 +112,7 @@ public class Versement : AggregateRoot<VersementId>
             referenceExterne));
     }
 
-    public void Rejeter(string raison, string? hashPrecedentAudit = null)
+    public void Rejeter(string raison, string? hashPrecedentAudit = null, string acteurId = "system")
     {
         if (Statut != VersementStatus.EnAttente)
             throw new InvalidOperationException("Only a pending versement can be rejected.");
@@ -121,9 +121,19 @@ public class Versement : AggregateRoot<VersementId>
 
         var payload = JsonSerializer.Serialize(new { Raison = raison });
         var auditHash = hashPrecedentAudit ?? GetLastAuditHash();
-        AddAuditEntry("system", AuditAction.VersementRejete, payload, auditHash);
+        AddAuditEntry(acteurId, AuditAction.VersementRejete, payload, auditHash);
 
         AddDomainEvent(new VersementRejectedEvent(Id, TontineId, PayeurId, raison));
+    }
+
+    /// <summary>
+    /// Appends an audit entry chained on this versement's last entry (e.g. proof details of a manual
+    /// entry). Must be called right after <see cref="Create"/> / <see cref="Confirmer"/> within the same
+    /// unit of work so that the tontine-level chain stays linear.
+    /// </summary>
+    public void AjouterEntreeAudit(AuditAction action, string acteurId, string payload)
+    {
+        AddAuditEntry(acteurId, action, payload, GetLastAuditHash());
     }
 
     public bool VerifierIntegrite()
@@ -133,16 +143,13 @@ public class Versement : AggregateRoot<VersementId>
         if (HashCourant != expectedHash)
             return false;
 
-        // Verify the audit trail chain (intra-versement)
-        string? previousHash = null;
+        // Each entry must be self-consistent (content + its recorded predecessor hash).
+        // Linkage between entries is verified at tontine level (IAuditTrailService.VerifierChaine),
+        // because a versement's entries are interleaved with other versements' entries in that chain.
         foreach (var entry in _auditTrail)
         {
-            // For the first entry, use its own HashPrecedent (set from tontine chain)
-            var expected = previousHash ?? entry.HashPrecedent;
-            if (!entry.VerifyIntegrity(expected))
+            if (!entry.VerifyIntegrity(entry.HashPrecedent))
                 return false;
-
-            previousHash = entry.HashCourant;
         }
 
         return true;

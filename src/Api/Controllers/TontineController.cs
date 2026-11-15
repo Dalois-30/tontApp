@@ -15,6 +15,7 @@ using Application.TontineManagement.Queries.GetTontineById;
 using Application.TontineManagement.Queries.GetTourActuel;
 using Application.PaymentManagement.Queries.GetVersementsByRound;
 using Infrastructure.Billing;
+using Api.Security;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -84,6 +85,7 @@ public class TontineController : ControllerBase
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(TontineDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [TontineAccess(NiveauAcces.Membre)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var query = new GetTontineByIdQuery(id);
@@ -109,6 +111,7 @@ public class TontineController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> AddMember(
         Guid id,
         [FromBody] AddMemberRequest request,
@@ -145,6 +148,7 @@ public class TontineController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken)
     {
         try
@@ -177,6 +181,7 @@ public class TontineController : ControllerBase
     [ProducesResponseType(typeof(OpenRoundResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> OuvrirTour(Guid id, CancellationToken cancellationToken)
     {
         try
@@ -211,6 +216,7 @@ public class TontineController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> CloturerTour(
         Guid id,
         Guid roundId,
@@ -249,6 +255,7 @@ public class TontineController : ControllerBase
     [ProducesResponseType(typeof(GenererCodeInvitationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> GenererCodeInvitation(
         Guid id,
         [FromQuery] int nombreUsagesMax = 1,
@@ -324,6 +331,7 @@ public class TontineController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> SuspendreMembre(
         Guid id,
         Guid membreId,
@@ -369,6 +377,7 @@ public class TontineController : ControllerBase
     /// </summary>
     [HttpGet("{id:guid}/tours/{tourId:guid}/paiements")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [TontineAccess(NiveauAcces.Membre)]
     public async Task<IActionResult> GetPaiementsByRound(
         Guid id,
         Guid tourId,
@@ -386,6 +395,7 @@ public class TontineController : ControllerBase
     [HttpGet("{id:guid}/tours/actuel")]
     [ProducesResponseType(typeof(TourActuelDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [TontineAccess(NiveauAcces.Membre)]
     public async Task<IActionResult> GetTourActuel(Guid id, CancellationToken cancellationToken)
     {
         var query = new GetTourActuelQuery(id);
@@ -406,6 +416,7 @@ public class TontineController : ControllerBase
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> EnvoyerMessage(
         Guid id,
         [FromBody] EnvoyerMessageRequest request,
@@ -439,6 +450,7 @@ public class TontineController : ControllerBase
     [HttpGet("{id:guid}/export/pdf")]
     [ProducesResponseType(200)]
     [ProducesResponseType(404)]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> ExportPdf(Guid id, CancellationToken cancellationToken)
     {
         try

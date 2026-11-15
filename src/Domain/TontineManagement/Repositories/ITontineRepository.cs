@@ -11,6 +11,9 @@ public interface ITontineRepository
     Task<IReadOnlyList<Tontine>> GetByStatusReadOnlyAsync(TontineStatus status, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Tontine>> GetByGestionnaireIdReadOnlyAsync(UtilisateurId gestionnaireId, CancellationToken cancellationToken = default);
 
+    /// <summary>Tontines in which the given user holds a membership.</summary>
+    Task<IReadOnlyList<Tontine>> GetByMembreUtilisateurIdReadOnlyAsync(UtilisateurId utilisateurId, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Finds the tontine that contains an invitation matching the given code hash.
     /// Returns null if no matching invitation is found.
