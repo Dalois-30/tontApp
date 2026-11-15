@@ -10,6 +10,7 @@ export default function AuditTrailPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [chaineValide, setChaineValide] = useState<boolean | null>(null);
   const pageSize = 20;
 
   const fetchAudit = useCallback(async (p: number) => {
@@ -21,6 +22,7 @@ export default function AuditTrailPage() {
       if (res.ok) {
         const data: AuditEntriesResult = await res.json();
         setEntries(data.entries);
+        setChaineValide(data.chaineValide ?? null);
         setTotalPages(data.totalPages);
       }
     } finally {
@@ -35,6 +37,20 @@ export default function AuditTrailPage() {
   return (
     <div className="max-w-6xl space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Audit Trail</h1>
+      {chaineValide !== null && (
+        <div
+          data-testid="chaine"
+          className={`px-4 py-3 rounded-md text-sm border ${
+            chaineValide
+              ? "bg-green-50 border-green-200 text-green-800"
+              : "bg-red-50 border-red-200 text-red-800"
+          }`}
+        >
+          {chaineValide
+            ? "✔ Chaîne d'audit intègre : aucune entrée n'a été modifiée."
+            : "✖ Chaîne d'audit rompue : au moins une entrée a été altérée."}
+        </div>
+      )}
       <p className="text-sm text-gray-500">
         Historique immuable de toutes les actions sur votre tontine (chaîne
         SHA-256).

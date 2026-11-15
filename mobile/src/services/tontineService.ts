@@ -9,6 +9,7 @@ import type {
   TontineSummary,
   TontineDetail,
   TontineStatus,
+  StatutPaiement,
   MembreRetardataire,
   RelancerSmsRequest,
   CloreTourResponse,
@@ -55,12 +56,79 @@ function mapToTontineSummary(dto: BackendTontineDto): TontineSummary {
   };
 }
 
-function mapToTontineDetail(dto: BackendTontineDto): TontineDetail {
+/** GET /tontines/{id}/details — tontine with members (status in the current round) and rounds */
+interface BackendTontineDetailsDto {
+  id: string;
+  nom: string;
+  description: string;
+  montantCotisation: number;
+  devise: string;
+  periodicite: string;
+  maxMembres: number;
+  status: string;
+  membres: {
+    id: string;
+    nom: string;
+    telephone: string | null;
+    statut: string; // paye | en_attente | a_payer | en_retard | beneficiaire | suspendu
+    utilisateurId: string | null;
+    rang: number;
+  }[];
+  tours: {
+    id: string;
+    numero: number;
+    beneficiaire: { nom: string } | null;
+    status: string; // Ouvert | Cloture
+    dateOuverture: string;
+    dateCloture: string | null;
+    dateLimite: string;
+  }[];
+  createdAt: string;
+  gestionnaireId: string;
+  gestionnaireNom: string | null;
+}
+
+function mapStatutPaiement(statut: string): StatutPaiement | undefined {
+  if (statut === 'paye') return 'paye';
+  if (statut === 'en_retard') return 'en_retard';
+  if (statut === 'en_attente' || statut === 'a_payer') return 'en_attente';
+  return undefined; // beneficiaire, suspendu
+}
+
+function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
+  const tour = dto.tours.find((t) => t.status === 'Ouvert');
+  const payeurs = dto.membres.filter((m) => m.statut !== 'beneficiaire' && m.statut !== 'suspendu');
   return {
-    ...mapToTontineSummary(dto),
-    gestionnaireName: '',
+    id: dto.id,
+    nom: dto.nom,
+    description: dto.description,
+    status: dto.status as TontineStatus,
+    montantCotisation: dto.montantCotisation,
+    devise: dto.devise,
+    frequence: dto.periodicite,
+    nombreMembres: dto.membres.length,
+    dateCreation: dto.createdAt,
     gestionnaireId: dto.gestionnaireId,
-    membres: [], // Member list not included in detail endpoint yet
+    gestionnaireName: dto.gestionnaireNom ?? '',
+    membres: dto.membres.map((m) => ({
+      id: m.id,
+      nom: m.nom,
+      telephone: m.telephone ?? '',
+      dateAdhesion: '',
+      statutPaiement: mapStatutPaiement(m.statut),
+    })),
+    tourActuel: tour
+      ? {
+          id: tour.id,
+          numero: tour.numero,
+          beneficiaireNom: tour.beneficiaire?.nom ?? '',
+          dateOuverture: tour.dateOuverture,
+          dateCloture: tour.dateLimite,
+          estOuvert: true,
+          nombrePaiementsRecus: payeurs.filter((m) => m.statut === 'paye').length,
+          nombrePaiementsAttendus: payeurs.length,
+        }
+      : null,
   };
 }
 
@@ -81,7 +149,7 @@ export const tontineService = {
    * Get detailed tontine information.
    */
   async getTontineById(id: string): Promise<TontineDetail> {
-    const response = await apiClient.get<BackendTontineDto>(`/tontines/${id}`);
+    const response = await apiClient.get<BackendTontineDetailsDto>(`/tontines/${id}/details`);
     return mapToTontineDetail(response.data);
   },
 
@@ -122,16 +190,15 @@ export const tontineService = {
     tontineId: string,
     tourId: string,
   ): Promise<CloreTourResponse> {
-    const response = await apiClient.post<CloreTourResponse>(
-      `/tontines/${tontineId}/tours/${tourId}/clore`,
-    );
-    return response.data;
+    await apiClient.post(`/tontines/${tontineId}/rounds/${tourId}/close`);
+    return { tourId, estCloture: true };
   },
 
-  /**
-   * POST /tontines
-   * Create a new tontine. The creator becomes gestionnaire.
-   */
+  /** Draft → Active: opens round 1 (requires the minimum number of members). */
+  async activerTontine(tontineId: string): Promise<void> {
+    await apiClient.post(`/tontines/${tontineId}/activate`);
+  },
+
   async createTontine(data: CreateTontineRequest): Promise<CreateTontineResponse> {
     const response = await apiClient.post<CreateTontineResponse>('/tontines', data);
     return response.data;
@@ -180,7 +247,7 @@ export const tontineService = {
    */
   async getTourActuel(tontineId: string): Promise<TourActuelDto | null> {
     try {
-      const response = await apiClient.get<TourActuelDto>(`/tontines/${tontineId}/tour-actuel`);
+      const response = await apiClient.get<TourActuelDto>(`/tontines/${tontineId}/tours/actuel`);
       return response.data;
     } catch {
       return null;
