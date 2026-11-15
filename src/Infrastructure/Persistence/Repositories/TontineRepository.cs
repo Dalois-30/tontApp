@@ -65,8 +65,7 @@ internal sealed class TontineRepository : ITontineRepository
             .Include(MembersNavigation)
             .Include(RoundsNavigation)
             .Include(InvitationsNavigation)
-            .Where(t => _dbContext.Set<Invitation>()
-                .Any(i => EF.Property<Guid>(i, "tontine_id") == t.Id.Value && i.CodeHash == codeHash))
+            .Where(t => t.Invitations.Any(i => i.CodeHash == codeHash))
             .FirstOrDefaultAsync(cancellationToken);
     }
 
@@ -90,6 +89,15 @@ internal sealed class TontineRepository : ITontineRepository
             .Where(t => t.GestionnaireId == UtilisateurId.From(guid)
                       && t.Status != TontineStatus.Cancelled)
             .CountAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Tontine>> GetByMembreUtilisateurIdReadOnlyAsync(UtilisateurId utilisateurId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Tontines
+            .AsNoTracking()
+            .Include(MembersNavigation)
+            .Where(t => t.Members.Any(m => m.UtilisateurId == utilisateurId))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Tontine>> GetByGestionnaireIdReadOnlyAsync(UtilisateurId gestionnaireId, CancellationToken cancellationToken = default)

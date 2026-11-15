@@ -1,6 +1,7 @@
 namespace Application;
 
 using Application.Common.Behaviors;
+using Application.TontineManagement.Services;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +19,8 @@ public static class DependencyInjection
 
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+
+        services.AddScoped<ITontineAccessService, TontineAccessService>();
 
         return services;
     }

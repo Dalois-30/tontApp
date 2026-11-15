@@ -20,12 +20,15 @@ public class OrangeMoneyWebhookController : ControllerBase
     private readonly IMediator _mediator;
     private readonly AfricasTalkingOptions _options;
     private readonly ILogger<OrangeMoneyWebhookController> _logger;
+    private readonly Api.Security.FeatureFlags _features;
 
     public OrangeMoneyWebhookController(
         IMediator mediator,
         IOptions<AfricasTalkingOptions> options,
-        ILogger<OrangeMoneyWebhookController> logger)
+        ILogger<OrangeMoneyWebhookController> logger,
+        IOptions<Api.Security.FeatureFlags> features)
     {
+        _features = features.Value;
         _mediator = mediator;
         _options = options.Value;
         _logger = logger;
@@ -45,6 +48,9 @@ public class OrangeMoneyWebhookController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> HandleWebhook(CancellationToken cancellationToken)
     {
+        if (!_features.MobileMoney)
+            return NotFound();
+
         // 1. Read raw body for HMAC verification
         Request.EnableBuffering();
         using var reader = new StreamReader(Request.Body, Encoding.UTF8, leaveOpen: true);
