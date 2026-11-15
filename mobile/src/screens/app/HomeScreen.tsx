@@ -19,6 +19,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../../navigation/types';
 import type { TontineSummary } from '../../types/api';
 import { tontineService } from '../../services/tontineService';
+import { projetService, type ProjetResume } from '../../services/projetService';
+import { formatMontant } from '../../utils/format';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { TontineCard } from '../../components/TontineCard';
 import { HomeScreenSkeleton } from '../../components/SkeletonLoader';
@@ -45,11 +47,17 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
     gcTime: QUERY_CACHE_TIME_MS,
   });
 
+  const { data: projets, refetch: refetchProjets } = useQuery<ProjetResume[], Error>({
+    queryKey: ['projets'],
+    queryFn: projetService.mesProjets,
+  });
+
   // Refresh when coming back to the list (after joining, creating or activating a tontine).
   useFocusEffect(
     useCallback(() => {
       void refetch();
-    }, [refetch]),
+      void refetchProjets();
+    }, [refetch, refetchProjets]),
   );
 
   // Request push notification permission on first mount
@@ -137,6 +145,36 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
               colors={[colors.primary]}
             />
           }
+          ListFooterComponent={
+            <View style={styles.projets}>
+              <View style={styles.projetsHeader}>
+                <Text style={styles.projetsTitle}>Mes projets collectifs</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('RejoindreProjet')} accessibilityRole="button">
+                  <Text style={styles.profilLink}>Rejoindre</Text>
+                </TouchableOpacity>
+              </View>
+              {(projets ?? []).length === 0 ? (
+                <Text style={styles.emptyText}>Aucun projet. Rejoignez-en un avec le code du gestionnaire.</Text>
+              ) : null}
+              {(projets ?? []).map((p) => (
+                <TouchableOpacity key={p.id} style={styles.projetCard} activeOpacity={0.7}
+                  onPress={() => navigation.navigate('ProjetDetail', { projetId: p.id })}
+                  accessibilityRole="button" accessibilityLabel={`Projet ${p.nom}`}>
+                  <View style={styles.projetRow}>
+                    <Text style={styles.projetNom}>{p.nom}</Text>
+                    <Text style={styles.projetPct}>{p.progression} %</Text>
+                  </View>
+                  <View style={styles.projetBar}><View style={[styles.projetBarFill, { width: `${Math.min(100, p.progression)}%` }]} /></View>
+                  <Text style={styles.projetInfo}>
+                    {p.role === 'gestionnaire'
+                      ? `Vous gérez – ${p.participants} participant(s)`
+                      : `Mon palier ${formatMontant(p.monPalier ?? 0)}` +
+                        ((p.monResteDu ?? 0) > 0 ? ` – reste dû ${formatMontant(p.monResteDu ?? 0)}` : ' – à jour')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          }
           ListEmptyComponent={
             <View style={styles.centered}>
               <Text style={styles.emptyText}>
@@ -171,6 +209,16 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  projets: { marginTop: spacing.lg, gap: spacing.sm, paddingBottom: 96 },
+  projetsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  projetsTitle: { fontSize: fontSizes.lg, fontWeight: '700', color: colors.textPrimary },
+  projetCard: { backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: 6 },
+  projetRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  projetNom: { fontSize: fontSizes.md, fontWeight: '600', color: colors.textPrimary },
+  projetPct: { fontSize: fontSizes.md, fontWeight: '600', color: colors.primary },
+  projetBar: { height: 6, borderRadius: 3, backgroundColor: colors.border, overflow: 'hidden' },
+  projetBarFill: { height: '100%', backgroundColor: colors.primary },
+  projetInfo: { fontSize: fontSizes.sm, color: colors.textSecondary },
   container: {
     flex: 1,
     backgroundColor: colors.background,

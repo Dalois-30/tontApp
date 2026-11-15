@@ -27,6 +27,7 @@ export default function PaiementsPage() {
 
   // Formulaire d'encaissement en espèces
   const [membreId, setMembreId] = useState("");
+  const [tourId, setTourId] = useState("");
   const [montant, setMontant] = useState("");
   const [preuve, setPreuve] = useState("");
 
@@ -60,11 +61,35 @@ export default function PaiementsPage() {
 
   const tourOuvert = tontine?.tours.find((t) => t.status === "Ouvert");
   const membresAEncaisser =
-    tontine?.membres.filter((m) => STATUTS_A_ENCAISSER.has(m.statut)) ?? [];
+    tontine?.membres.filter(
+      (m) => STATUTS_A_ENCAISSER.has(m.statut) || (m.resteDu ?? 0) > 0
+    ) ?? [];
+
+  // Rounds the selected member can pay: arrears first (oldest), then the current round.
+  const membreChoisi = tontine?.membres.find((m) => m.id === membreId);
+  const toursPossibles = membreChoisi
+    ? [
+        ...(membreChoisi.toursImpayes ?? []).map((n) => {
+          const t = tontine!.tours.find((x) => x.numero === n);
+          return t ? { id: t.id, label: `Tour ${n} — rattrapage` } : null;
+        }),
+        ...(tourOuvert && STATUTS_A_ENCAISSER.has(membreChoisi.statut)
+          ? [{ id: tourOuvert.id, label: `Tour ${tourOuvert.numero} — en cours` }]
+          : []),
+      ].filter((x): x is { id: string; label: string } => x !== null)
+    : [];
+
+  function choisirMembre(id: string) {
+    setMembreId(id);
+    const m = tontine?.membres.find((x) => x.id === id);
+    const premierImpaye = m?.toursImpayes?.[0];
+    const t = premierImpaye !== undefined ? tontine?.tours.find((x) => x.numero === premierImpaye) : tourOuvert;
+    setTourId(t?.id ?? "");
+  }
 
   async function enregistrer(e: React.FormEvent) {
     e.preventDefault();
-    if (!tontine || !tourOuvert || !membreId) return;
+    if (!tontine || !tourId || !membreId) return;
     setBusy("form");
     setMessage(null);
     const res = await fetch("/api/versements/manuel", {
@@ -72,7 +97,7 @@ export default function PaiementsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tontineId: tontine.id,
-        tourId: tourOuvert.id,
+        tourId,
         membreId,
         montant: Number(montant),
         descriptionPreuve: preuve,
@@ -83,6 +108,7 @@ export default function PaiementsPage() {
     if (res.ok) {
       setMessage({ type: "ok", text: "Paiement enregistré : il est en attente de validation." });
       setMembreId("");
+      setTourId("");
       setPreuve("");
       fetchAll(page);
     } else {
@@ -152,13 +178,13 @@ export default function PaiementsPage() {
         {!tourOuvert ? (
           <p className="text-sm text-gray-500">Aucun tour ouvert : activez la tontine pour encaisser.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <label className="block text-sm">
               <span className="text-gray-700">Membre</span>
               <select
                 name="membre"
                 value={membreId}
-                onChange={(e) => setMembreId(e.target.value)}
+                onChange={(e) => choisirMembre(e.target.value)}
                 required
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
               >
@@ -167,7 +193,23 @@ export default function PaiementsPage() {
                   <option key={m.id} value={m.id}>
                     {m.nom}
                     {m.statut === "en_retard" ? " (en retard)" : ""}
+                    {(m.resteDu ?? 0) > 0 ? ` (reste dû ${formatMontant(m.resteDu ?? 0)})` : ""}
                   </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-gray-700">Tour</span>
+              <select
+                name="tour"
+                value={tourId}
+                onChange={(e) => setTourId(e.target.value)}
+                required
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
+              >
+                <option value="">— Choisir —</option>
+                {toursPossibles.map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
                 ))}
               </select>
             </label>

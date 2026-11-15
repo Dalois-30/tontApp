@@ -28,6 +28,7 @@ public sealed class TontineDbContext : DbContext, IUnitOfWork
     public DbSet<PlanAbonnement> PlansAbonnement => Set<PlanAbonnement>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ProfilCredit> ProfilsCredit => Set<ProfilCredit>();
+    public DbSet<Domain.ProjectManagement.Projet> Projets => Set<Domain.ProjectManagement.Projet>();
 
     public TontineDbContext(DbContextOptions<TontineDbContext> options, IMediator mediator)
         : base(options)

@@ -5,6 +5,7 @@ import type { TontineDto, VersementDto } from "@/lib/types";
 import StatCard from "@/components/StatCard";
 import StatusBadge from "@/components/StatusBadge";
 import RelancerButton from "@/components/RelancerButton";
+import AdhesionsEnAttente from "@/components/AdhesionsEnAttente";
 
 async function getTontine(token: string): Promise<TontineDto | null> {
   try {
@@ -62,6 +63,13 @@ export default async function DashboardGestionnairePage() {
     (m) => m.statut === "paye" || m.statut === "confirme"
   );
   const tourActuel = tontine.tours.find((t) => t.status === "Ouvert");
+  const membresActifs = tontine.membres.filter((m) => m.statut !== "adhesion_en_attente");
+  // Contributors of the current round: the beneficiary and suspended members do not pay.
+  const payeurs = membresActifs.filter(
+    (m) => m.statut !== "beneficiaire" && m.statut !== "suspendu"
+  );
+  const demandes = tontine.membres.filter((m) => m.statut === "adhesion_en_attente");
+  const arrieres = membresActifs.filter((m) => (m.resteDu ?? 0) > 0);
 
   return (
     <div className="max-w-6xl space-y-8">
@@ -77,7 +85,7 @@ export default async function DashboardGestionnairePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Membres"
-          value={`${tontine.membres.length} / ${tontine.maxMembres}`}
+          value={`${membresActifs.length} / ${tontine.maxMembres}`}
           subtitle="inscrits"
         />
         <StatCard
@@ -88,8 +96,8 @@ export default async function DashboardGestionnairePage() {
         <StatCard
           title="Paiements confirmés"
           value={membresPaye.length}
-          subtitle={`sur ${tontine.membres.length}`}
-          trend={membresPaye.length === tontine.membres.length ? "up" : "neutral"}
+          subtitle={`sur ${payeurs.length}`}
+          trend={payeurs.length > 0 && membresPaye.length === payeurs.length ? "up" : "neutral"}
         />
         <StatCard
           title="En retard"
@@ -102,6 +110,30 @@ export default async function DashboardGestionnairePage() {
           }
         />
       </div>
+
+      {demandes.length > 0 && (
+        <AdhesionsEnAttente tontineId={tontine.id} demandes={demandes} />
+      )}
+
+      {arrieres.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6 border border-amber-200">
+          <h2 className="text-lg font-semibold text-amber-900 mb-1">Reste dû sur les tours précédents</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Cotisations non réglées des tours passés, y compris le rattrapage des membres arrivés en cours de cycle.
+          </p>
+          <ul className="divide-y divide-gray-200">
+            {arrieres.map((m) => (
+              <li key={m.id} className="py-3 flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium text-gray-900">{m.nom}</p>
+                  <p className="text-sm text-gray-500">Tours {m.toursImpayes?.join(", ")}</p>
+                </div>
+                <span className="font-semibold text-amber-900 tabular-nums">{formatMontant(m.resteDu ?? 0)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ── Tour actuel ────────────────────────────────────────────── */}
       {tourActuel && (

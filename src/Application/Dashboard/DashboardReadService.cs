@@ -250,14 +250,30 @@ public sealed class DashboardReadService : IDashboardReadService
     private async Task<DashTontineDto> BuildTontineAsync(Tontine tontine, CancellationToken ct)
     {
         var tourOuvert = tontine.Rounds.FirstOrDefault(r => !r.IsCompleted);
+        var versements = await _versements.GetByTontineAsync(tontine.Id, ct);
         IReadOnlyList<Versement> versementsTour = tourOuvert is null
             ? []
-            : await _versements.GetByTontineAndTourAsync(tontine.Id, TourId.From(tourOuvert.Id.Value), ct);
+            : versements.Where(v => v.TourId.Value == tourOuvert.Id.Value).ToList();
+
+        // A round counts as settled for a member once a payment is pending or confirmed.
+        var regles = versements
+            .Where(v => v.Statut != VersementStatus.Echoue)
+            .Select(v => (v.PayeurId.Value, v.TourId.Value))
+            .ToHashSet();
+        var cotisation = tontine.ContributionAmount.Amount;
 
         var membres = new List<DashMembreDto>();
-        foreach (var m in tontine.Members.OrderBy(m => m.Rang))
+        foreach (var m in tontine.Members.OrderBy(m => m.Statut == StatutMembre.EnAttente).ThenBy(m => m.Rang))
+        {
+            var impayes = m.Statut == StatutMembre.Actif
+                ? tontine.ToursDusPar(m.Id)
+                    .Where(r => r.Id != tourOuvert?.Id && !regles.Contains((m.Id.Value, r.Id.Value)))
+                    .Select(r => r.RoundNumber).ToList()
+                : [];
             membres.Add(new DashMembreDto(m.Id.Value, m.Name, await TelephoneAsync(m, ct),
-                StatutMembreTour(m, tourOuvert, versementsTour), m.UtilisateurId?.Value, m.Rang));
+                StatutMembreTour(m, tourOuvert, versementsTour), m.UtilisateurId?.Value, m.Rang,
+                impayes.Count * cotisation, impayes));
+        }
 
         var parId = membres.ToDictionary(m => m.Id);
         var tours = tontine.Rounds.OrderBy(r => r.RoundNumber).Select(r => new DashTourDto(
@@ -273,6 +289,7 @@ public sealed class DashboardReadService : IDashboardReadService
     private static string StatutMembreTour(Member m, Round? tour, IReadOnlyList<Versement> versements)
     {
         if (m.Statut == StatutMembre.Suspendu) return "suspendu";
+        if (m.Statut == StatutMembre.EnAttente) return "adhesion_en_attente";
         if (tour is null) return "a_payer";
         if (m.Id == tour.BeneficiaryId) return "beneficiaire";
 

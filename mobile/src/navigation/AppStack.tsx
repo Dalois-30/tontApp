@@ -16,6 +16,8 @@ import { RejoindreParCodeScreen } from '../screens/app/RejoindreParCodeScreen';
 import { InvitationScreen } from '../screens/app/InvitationScreen';
 import { HistoriqueVersementsScreen } from '../screens/app/HistoriqueVersementsScreen';
 import { NotificationsScreen } from '../screens/app/NotificationsScreen';
+import { ProjetDetailScreen } from '../screens/app/ProjetDetailScreen';
+import { RejoindreProjetScreen } from '../screens/app/RejoindreProjetScreen';
 import type { AppStackParamList } from './types';
 import { colors } from '../config/theme';
 
@@ -37,6 +39,16 @@ export function AppStack(): React.JSX.Element {
         name="Home"
         component={HomeScreen}
         options={{ title: 'Mes Tontines' }}
+      />
+      <Stack.Screen
+        name="ProjetDetail"
+        component={ProjetDetailScreen}
+        options={{ title: 'Projet collectif' }}
+      />
+      <Stack.Screen
+        name="RejoindreProjet"
+        component={RejoindreProjetScreen}
+        options={{ title: 'Rejoindre un projet' }}
       />
       <Stack.Screen
         name="TontineDetail"

@@ -6,7 +6,7 @@ using Domain.IdentityManagement.ValueObjects;
 using Domain.TontineManagement.Repositories;
 using Domain.TontineManagement.ValueObjects;
 
-public sealed class RejoindreParCodeCommandHandler : ICommandHandler<RejoindreParCodeCommand>
+public sealed class RejoindreParCodeCommandHandler : ICommandHandler<RejoindreParCodeCommand, string>
 {
     private readonly ITontineRepository _tontineRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -19,7 +19,7 @@ public sealed class RejoindreParCodeCommandHandler : ICommandHandler<RejoindrePa
         _unitOfWork = unitOfWork;
     }
 
-    public async Task Handle(RejoindreParCodeCommand request, CancellationToken cancellationToken)
+    public async Task<string> Handle(RejoindreParCodeCommand request, CancellationToken cancellationToken)
     {
         // Hash the provided plain-text code to find the matching invitation
         var codeHash = InvitationCode.ComputeHash(request.Code);
@@ -29,9 +29,11 @@ public sealed class RejoindreParCodeCommandHandler : ICommandHandler<RejoindrePa
 
         var utilisateurId = UtilisateurId.From(request.UtilisateurId);
 
-        tontine.JoinWithInvitation(request.MemberName, request.Code, utilisateurId);
+        var member = tontine.JoinWithInvitation(request.MemberName, request.Code, utilisateurId);
 
         await _tontineRepository.UpdateAsync(tontine, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return member.Statut == Domain.TontineManagement.ValueObjects.StatutMembre.EnAttente ? "en_attente" : "actif";
     }
 }

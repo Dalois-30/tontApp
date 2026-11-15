@@ -31,6 +31,23 @@ public class Member : Entity<MemberId>
         UtilisateurId = utilisateurId;
     }
 
+    /// <summary>Membership request on an active tontine: no rank until approved.</summary>
+    internal static Member CreateEnAttente(string name, UtilisateurId utilisateurId)
+    {
+        var m = Create(name, 0, utilisateurId);
+        m.Statut = StatutMembre.EnAttente;
+        return m;
+    }
+
+    /// <summary>Approves a pending membership and places the member at <paramref name="rang"/>.</summary>
+    internal void Accepter(int rang)
+    {
+        if (Statut != StatutMembre.EnAttente)
+            throw new InvalidOperationException("Only a pending membership can be approved.");
+        Statut = StatutMembre.Actif;
+        Rang = rang;
+    }
+
     public static Member Create(string name, int rang = 0, UtilisateurId? utilisateurId = null)
     {
         if (string.IsNullOrWhiteSpace(name))

@@ -253,8 +253,8 @@ public class Tontine : AggregateRoot<TontineId>
     /// </summary>
     public (Invitation Invitation, string PlainCode) GenerateInvitation(int nombreUsagesMax = 1, int expirationDays = 7)
     {
-        if (Status != TontineStatus.Draft)
-            throw new InvalidOperationException("Invitations can only be generated when the tontine is in Draft status.");
+        if (Status is not (TontineStatus.Draft or TontineStatus.Active))
+            throw new InvalidOperationException("Invitations can only be generated while the tontine is in Draft or Active status.");
 
         var (invitation, plainCode) = Invitation.Create(nombreUsagesMax, expirationDays);
         _invitations.Add(invitation);
@@ -269,10 +269,15 @@ public class Tontine : AggregateRoot<TontineId>
     /// Allows a user to join the tontine using a plain-text invitation code.
     /// Validates: tontine is Draft, code matches a valid invitation, user not already a member.
     /// </summary>
+    /// <remarks>
+    /// Draft: the member is added immediately. Active: the membership stays <see cref="StatutMembre.EnAttente"/>
+    /// until the gestionnaire approves it (<see cref="AccepterAdhesion"/>); the member then joins the end of
+    /// the rotation and owes the contributions of the rounds already opened (computed as arrears).
+    /// </remarks>
     public Member JoinWithInvitation(string memberName, string invitationCode, UtilisateurId utilisateurId)
     {
-        if (Status != TontineStatus.Draft)
-            throw new InvalidOperationException("Members can only join when the tontine is in Draft status.");
+        if (Status is not (TontineStatus.Draft or TontineStatus.Active))
+            throw new InvalidOperationException("Members can only join a tontine in Draft or Active status.");
 
         // Find invitation by comparing hash
         var invitation = _invitations.FirstOrDefault(i => i.MatchesCode(invitationCode))
@@ -291,15 +296,53 @@ public class Tontine : AggregateRoot<TontineId>
         if (_members.Any(m => m.Name == memberName))
             throw new InvalidOperationException($"A member with the name '{memberName}' already exists.");
 
-        var member = Member.Create(memberName, _members.Count + 1, utilisateurId);
+        var member = Status == TontineStatus.Draft
+            ? Member.Create(memberName, _members.Count + 1, utilisateurId)
+            : Member.CreateEnAttente(memberName, utilisateurId);
         _members.Add(member);
 
         invitation.IncrementUsage();
 
-        AddDomainEvent(new MemberAddedEvent(Id, member.Id, memberName));
+        if (member.Statut == StatutMembre.Actif)
+            AddDomainEvent(new MemberAddedEvent(Id, member.Id, memberName));
 
         return member;
     }
+
+    // ── Adhésion tardive ────────────────────────────────────────────
+    /// <summary>Approves a pending membership: the member is placed last in the rotation.</summary>
+    public void AccepterAdhesion(MemberId membreId)
+    {
+        if (Status != TontineStatus.Active)
+            throw new InvalidOperationException("Memberships can only be approved while the tontine is Active.");
+
+        var member = _members.FirstOrDefault(m => m.Id == membreId)
+            ?? throw new InvalidOperationException("Member not found.");
+
+        member.Accepter(_members.Max(m => m.Rang) + 1);
+
+        AddDomainEvent(new MemberAddedEvent(Id, member.Id, member.Name));
+    }
+
+    /// <summary>Refuses a pending membership: the request is removed.</summary>
+    public void RefuserAdhesion(MemberId membreId)
+    {
+        var member = _members.FirstOrDefault(m => m.Id == membreId)
+            ?? throw new InvalidOperationException("Member not found.");
+
+        if (member.Statut != StatutMembre.EnAttente)
+            throw new InvalidOperationException("Only a pending membership can be refused.");
+
+        _members.Remove(member);
+        AddDomainEvent(new MemberRemovedEvent(Id, membreId));
+    }
+
+    /// <summary>
+    /// Rounds a member owes: every round already opened before the current one where the member is
+    /// not the beneficiary. A late member owes them too (arrears). Payment status is checked by the caller.
+    /// </summary>
+    public IReadOnlyList<Round> ToursDusPar(MemberId membreId) =>
+        _rounds.Where(r => r.BeneficiaryId != membreId).OrderBy(r => r.RoundNumber).ToList().AsReadOnly();
 
     // ── SuspendMember ───────────────────────────────────────────────
     public void SuspendMember(MemberId memberId)
