@@ -219,7 +219,7 @@ footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--li
             <li><b>Inviter des membres</b>, puis <b>Générer un code d'invitation</b>. Le code à 6 caractères est valable 7 jours et peut être partagé via WhatsApp.</li>
             <li>Se déconnecter depuis <b>Profil</b>.</li>
           </ol>
-          <p class="keep"><b>À retenir :</b> on ne peut rejoindre une tontine que tant qu'elle est en brouillon. Générez les codes avant l'activation.</p>
+          <p class="keep"><b>À retenir :</b> un code fonctionne aussi après l'activation. Le nouveau membre attend alors la validation du gestionnaire, passe en dernier dans l'ordre des bénéficiaires et rattrape les cotisations des tours déjà ouverts (fonction ajoutée après le tournage).</p>
         </div>
       </article>
 
@@ -327,9 +327,9 @@ footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--li
         <p>Il est désactivé par défaut (<code>Features:MobileMoney</code> à <code>false</code>), puisque dans le modèle retenu l'argent reste hors de l'application. Il pourra être réactivé plus tard.</p></details>
       <details><summary>Limites connues de cette version</summary>
         <ul>
-          <li>Pas encore de paiement partiel ni de « reste dû » (prévu en phase 2, avec le volet Projet collectif).</li>
+          <li>Le volet <b>Projet collectif</b> (paliers d'engagement, paiements partiels, report du trop-perçu, baisse de palier soumise à validation, dépenses) et l'adhésion à une tontine déjà démarrée ont été ajoutés après le tournage : ils ne sont pas encore filmés ici.</li>
           <li>La validation est faite par le gestionnaire ; un rôle Trésorier distinct est prévu en phase 1.</li>
-          <li>La carte « Paiements confirmés » du tableau de bord web compte aussi le bénéficiaire (« sur 4 » au lieu de « sur 3 » côté mobile).</li>
+          <li>Dans la vidéo web, la carte « Paiements confirmés » affiche « sur 4 » : le bénéficiaire était compté à tort. C'est corrigé depuis (« sur 3 »).</li>
           <li>Deux paiements saisis exactement au même instant sur une même tontine pourraient créer une bifurcation dans la chaîne d'audit (verrou prévu avec le registre commun).</li>
         </ul></details>
     </div>
