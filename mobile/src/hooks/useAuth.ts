@@ -41,6 +41,20 @@ interface UseAuthReturn {
   clearError: () => void;
 }
 
+/** Reads the "nom" claim of the JWT (UTF-8, base64url) — empty string if absent. */
+function nomFromToken(token: string): string {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), '='));
+    const utf8 = decodeURIComponent(
+      Array.from(bin, (c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join(''),
+    );
+    return (JSON.parse(utf8) as { nom?: string }).nom ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export function useAuth(): UseAuthReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +112,7 @@ export function useAuth(): UseAuthReturn {
       setError(null);
       try {
         const result = await authService.login({ telephone, motDePasse });
-        const user = buildUser(result, telephone, '');
+        const user = buildUser(result, telephone, nomFromToken(result.accessToken));
         setAuth(user, result.accessToken, result.refreshToken);
         return true;
       } catch (err: unknown) {

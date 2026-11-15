@@ -69,6 +69,15 @@ internal sealed class TontineRepository : ITontineRepository
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<UtilisateurId?> GetUtilisateurIdOfMembreAsync(MemberId membreId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Set<Member>()
+            .AsNoTracking()
+            .Where(m => m.Id == membreId)
+            .Select(m => m.UtilisateurId)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task AddAsync(Tontine tontine, CancellationToken cancellationToken = default)
     {
         await _dbContext.Tontines.AddAsync(tontine, cancellationToken);
@@ -96,6 +105,7 @@ internal sealed class TontineRepository : ITontineRepository
         return await _dbContext.Tontines
             .AsNoTracking()
             .Include(MembersNavigation)
+            .Include(RoundsNavigation)
             .Where(t => t.Members.Any(m => m.UtilisateurId == utilisateurId))
             .ToListAsync(cancellationToken);
     }

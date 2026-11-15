@@ -20,8 +20,15 @@ public sealed class GetMesTontinesQueryHandler
         CancellationToken cancellationToken)
     {
         var gestionnaireId = UtilisateurId.From(request.GestionnaireId);
-        var tontines = await _tontineRepository.GetByGestionnaireIdReadOnlyAsync(
+        // Tontines the user manages + tontines the user has joined as a member.
+        var gerees = await _tontineRepository.GetByGestionnaireIdReadOnlyAsync(
             gestionnaireId, cancellationToken);
+        var rejointes = await _tontineRepository.GetByMembreUtilisateurIdReadOnlyAsync(
+            gestionnaireId, cancellationToken);
+        var tontines = gerees.Concat(rejointes)
+            .DistinctBy(t => t.Id)
+            .OrderByDescending(t => t.CreatedAt)
+            .ToList();
 
         return tontines.Select(t => new TontineDto(
             t.Id.Value,

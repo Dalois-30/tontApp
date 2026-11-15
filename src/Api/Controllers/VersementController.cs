@@ -1,6 +1,7 @@
 namespace Api.Controllers;
 
 using Api.Security;
+using Application.Dashboard;
 using Application.PaymentManagement.Commands.ConfirmVersement;
 using Application.PaymentManagement.Commands.EnregistrerVersementManuel;
 using Application.PaymentManagement.Commands.InitierVersement;
@@ -23,12 +24,15 @@ public class VersementController : ControllerBase
     private readonly IMediator _mediator;
     private readonly ITontineAccessService _accessService;
     private readonly FeatureFlags _features;
+    private readonly IDashboardReadService _dashboard;
 
     public VersementController(
         IMediator mediator,
         ITontineAccessService accessService,
-        IOptions<FeatureFlags> features)
+        IOptions<FeatureFlags> features,
+        IDashboardReadService dashboard)
     {
+        _dashboard = dashboard;
         _mediator = mediator;
         _accessService = accessService;
         _features = features.Value;
@@ -156,6 +160,23 @@ public class VersementController : ControllerBase
         }
 
         return Ok(new { status = "versement_rejete" });
+    }
+
+    // ── GET /api/v1/versements/{id}/statut ─────────────────────────
+    /// <summary>Status of a versement, visible to the members and the gestionnaire of its tontine.</summary>
+    [HttpGet("{id:guid}/statut")]
+    public async Task<IActionResult> GetStatut(Guid id, CancellationToken cancellationToken)
+    {
+        if (User.GetUtilisateurId() is not { } userId)
+            return Unauthorized(new { error = "User identity could not be determined." });
+
+        var acces = await _accessService.GetAccesParVersementAsync(id, userId, cancellationToken);
+        if (acces is null)
+            return NotFound(new { error = "Versement not found." });
+        if (AccessResults.Check(acces, NiveauAcces.Membre, User.EstAdmin()) is { } denied)
+            return denied;
+
+        return Ok(await _dashboard.GetVersementStatutAsync(id, cancellationToken));
     }
 
     // ── POST /api/v1/versements/initier ────────────────────────────

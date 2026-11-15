@@ -34,7 +34,10 @@
               "scheme": "tontinesapp"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -50,7 +53,8 @@
           "icon": "./assets/icon.png",
           "color": "#1B5E20"
         }
-      ]
+      ],
+      "./plugins/withLocalNoProxy"
     ]
   }
 }

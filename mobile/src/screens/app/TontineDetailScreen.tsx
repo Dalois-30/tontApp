@@ -4,15 +4,17 @@
  * countdown timer to tour closing, skeleton loader, navigation to Paiement & Gestionnaire.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../../navigation/types';
 import type { TontineMember } from '../../types/api';
@@ -55,17 +57,57 @@ export function TontineDetailScreen({
     gcTime: QUERY_CACHE_TIME_MS,
   });
 
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
+
   const isGestionnaire = tontine?.gestionnaireId === userId;
 
+  // Cash model: money stays outside the app. The member hands the contribution to the
+  // gestionnaire, who records it and validates it (web dashboard); the member sees it here.
   const handleNavigatePaiement = useCallback(() => {
-    if (tontine?.tourActuel) {
-      navigation.navigate('Paiement', {
-        tontineId,
-        tourId: tontine.tourActuel.id,
-        montant: tontine.montantCotisation,
-      });
-    }
+    if (!tontine) return;
+    Alert.alert(
+      'Payer ma cotisation',
+      `Remettez ${formatMontant(tontine.montantCotisation)} à votre gestionnaire` +
+        (tontine.gestionnaireName ? ` (${tontine.gestionnaireName})` : '') +
+        ". Il enregistre le paiement, puis le valide : il apparaît alors « confirmé » dans l'historique de vos versements.",
+      [
+        { text: 'Voir mon historique', onPress: () => navigation.navigate('HistoriqueVersements', { tontineId }) },
+        { text: 'OK' },
+      ],
+    );
   }, [navigation, tontineId, tontine]);
+
+  const [activating, setActivating] = useState(false);
+  const handleActiver = useCallback(() => {
+    Alert.alert(
+      'Activer la tontine',
+      'Les inscriptions seront fermées et le tour n°1 sera ouvert. Continuer ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Activer',
+          onPress: async () => {
+            setActivating(true);
+            try {
+              await tontineService.activerTontine(tontineId);
+              await refetch();
+            } catch (e) {
+              const msg =
+                (e as { response?: { data?: { error?: string } } }).response?.data?.error ??
+                (e as Error).message;
+              Alert.alert('Activation impossible', msg);
+            } finally {
+              setActivating(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [tontineId, refetch]);
 
   const handleNavigateGestionnaire = useCallback(() => {
     if (tontine?.tourActuel) {
@@ -188,7 +230,7 @@ export function TontineDetailScreen({
           ) : null}
 
           <PrimaryButton
-            title="Effectuer un paiement"
+            title="💵 Payer ma cotisation"
             onPress={handleNavigatePaiement}
             disabled={!tour.estOuvert}
             style={styles.actionButton}
@@ -212,11 +254,19 @@ export function TontineDetailScreen({
       </View>
 
       {isGestionnaire && tontine.status === 'Draft' ? (
-        <PrimaryButton
-          title="📨 Inviter des membres"
-          onPress={handleNavigateInvitation}
-          style={styles.actionButton}
-        />
+        <>
+          <PrimaryButton
+            title="📨 Inviter des membres"
+            onPress={handleNavigateInvitation}
+            style={styles.actionButton}
+          />
+          <PrimaryButton
+            title="🚀 Activer la tontine"
+            onPress={handleActiver}
+            disabled={activating}
+            style={styles.gestionnaireButton}
+          />
+        </>
       ) : null}
 
       <PrimaryButton

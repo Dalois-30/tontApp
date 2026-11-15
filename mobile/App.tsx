@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { QUERY_STALE_TIME_MS, QUERY_CACHE_TIME_MS } from './src/config/constants';
 import { setupNotificationHandler } from './src/services/notificationService';
+import { useAuthStore } from './src/store/authStore';
 
 // Configure foreground notification display before component tree mounts
 // Wrapped in try-catch: expo-notifications is not supported in Expo Go (SDK 53+).
@@ -41,6 +42,14 @@ const queryClient = new QueryClient({
       networkMode: 'online',
     },
   },
+});
+
+// Cached server data belongs to the signed-in user: drop it whenever the user changes
+// (logout, or another account on a shared phone) so no data leaks between accounts.
+useAuthStore.subscribe((state, prev) => {
+  if (state.user?.id !== prev.user?.id) {
+    queryClient.clear();
+  }
 });
 
 export default function App(): React.JSX.Element {

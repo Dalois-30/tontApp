@@ -28,6 +28,7 @@ export interface TourDto {
   status: string;
   dateOuverture: string;
   dateCloture?: string;
+  dateLimite?: string;
 }
 
 export interface VersementDto {
@@ -38,6 +39,9 @@ export interface VersementDto {
   tourId: string;
   status: string;
   dateCreation: string;
+  tourNumero?: number | null;
+  reference?: string | null;
+  dateConfirmation?: string | null;
 }
 
 export interface AuditEntryDto {
@@ -56,6 +60,7 @@ export interface AuditEntriesResult {
   page: number;
   pageSize: number;
   totalPages: number;
+  chaineValide?: boolean;
 }
 
 // ── Admin metrics ──────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ using Application.TontineManagement.Queries.GetTourActuel;
 using Application.PaymentManagement.Queries.GetVersementsByRound;
 using Infrastructure.Billing;
 using Api.Security;
+using Application.Dashboard;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -33,11 +34,13 @@ public class TontineController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly ITontineExportService _exportService;
+    private readonly IDashboardReadService _dashboard;
 
-    public TontineController(IMediator mediator, ITontineExportService exportService)
+    public TontineController(IMediator mediator, ITontineExportService exportService, IDashboardReadService dashboard)
     {
         _mediator = mediator;
         _exportService = exportService;
+        _dashboard = dashboard;
     }
 
     /// <summary>
@@ -450,6 +453,61 @@ public class TontineController : ControllerBase
     [HttpGet("{id:guid}/export/pdf")]
     [ProducesResponseType(200)]
     [ProducesResponseType(404)]
+    // ── GET /api/v1/tontines/{id}/details ──────────────────────────
+    /// <summary>Tontine with members (and their status in the current round) and rounds.</summary>
+    [HttpGet("{id:guid}/details")]
+    [TontineAccess(NiveauAcces.Membre)]
+    public async Task<IActionResult> GetDetails(Guid id, CancellationToken cancellationToken)
+    {
+        var tontine = await _dashboard.GetTontineAsync(id, cancellationToken);
+        return tontine is null ? NotFound(new { error = "Tontine not found." }) : Ok(tontine);
+    }
+
+    // ── GET /api/v1/tontines/{id}/versements ───────────────────────
+    [HttpGet("{id:guid}/versements")]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
+    public async Task<IActionResult> GetVersements(
+        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
+        => Ok(await _dashboard.GetVersementsAsync(id, page, pageSize, cancellationToken));
+
+    // ── GET /api/v1/tontines/{id}/tours/{tourId}/retardataires ─────
+    /// <summary>Active members (beneficiary excluded) with no pending or confirmed payment for the round.</summary>
+    [HttpGet("{id:guid}/tours/{tourId:guid}/retardataires")]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
+    public async Task<IActionResult> GetRetardataires(Guid id, Guid tourId, CancellationToken cancellationToken)
+    {
+        var result = await _dashboard.GetRetardatairesAsync(id, tourId, cancellationToken);
+        return result is null ? NotFound(new { error = "Round not found." }) : Ok(result);
+    }
+
+    // ── POST /api/v1/tontines/{id}/tours/{tourId}/relancer ─────────
+    /// <summary>SMS reminder to the given members, or to all late members of the round if none given.</summary>
+    [HttpPost("{id:guid}/tours/{tourId:guid}/relancer")]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
+    public async Task<IActionResult> RelancerTour(
+        Guid id, Guid tourId, [FromBody] RelancerRequest? request, CancellationToken cancellationToken)
+    {
+        var membreIds = request?.MembreIds;
+        if (membreIds is null || membreIds.Count == 0)
+        {
+            var retard = await _dashboard.GetRetardatairesAsync(id, tourId, cancellationToken);
+            if (retard is null) return NotFound(new { error = "Round not found." });
+            membreIds = retard.Select(r => r.MembreId).ToList();
+        }
+
+        var count = await _dashboard.RelancerAsync(id, membreIds, cancellationToken);
+        return Ok(new { relances = count });
+    }
+
+    // ── POST /api/v1/tontines/{id}/members/{membreId}/relancer ─────
+    [HttpPost("{id:guid}/members/{membreId:guid}/relancer")]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
+    public async Task<IActionResult> RelancerMembre(Guid id, Guid membreId, CancellationToken cancellationToken)
+    {
+        var count = await _dashboard.RelancerAsync(id, [membreId], cancellationToken);
+        return count == 0 ? NotFound(new { error = "Member not found or reminder not sent." }) : Ok(new { relances = count });
+    }
+
     [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> ExportPdf(Guid id, CancellationToken cancellationToken)
     {
@@ -509,3 +567,4 @@ public sealed record SuspendreMembreRequest(string Motif);
 /// Request body for sending a custom message to tontine members.
 /// </summary>
 public sealed record EnvoyerMessageRequest(string Message);
+public sealed record RelancerRequest(List<Guid>? MembreIds);
