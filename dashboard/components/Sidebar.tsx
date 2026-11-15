@@ -15,6 +15,7 @@ interface SidebarProps {
 const gestionnaireNav: NavItem[] = [
   { label: "Tableau de bord", href: "/gestionnaire" },
   { label: "Paiements", href: "/gestionnaire/paiements" },
+  { label: "Projets", href: "/gestionnaire/projets" },
   { label: "Audit Trail", href: "/gestionnaire/audit" },
 ];
 
@@ -38,7 +39,7 @@ export default function Sidebar({ role }: SidebarProps) {
       </div>
       <nav className="space-y-1">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || (item.href === "/gestionnaire/projets" && pathname.startsWith(item.href));
           return (
             <Link
               key={item.href}
