@@ -283,7 +283,8 @@ public sealed class DashboardReadService : IDashboardReadService
         return new DashTontineDto(tontine.Id.Value, tontine.Name, tontine.Description ?? string.Empty,
             tontine.ContributionAmount.Amount, tontine.ContributionAmount.Currency, tontine.Periodicity.ToString(),
             tontine.MaxMembers, tontine.Status.ToString(), membres, tours, tontine.CreatedAt,
-            tontine.GestionnaireId.Value, await NomUtilisateurAsync(tontine.GestionnaireId.Value.ToString(), ct));
+            tontine.GestionnaireId.Value, await NomUtilisateurAsync(tontine.GestionnaireId.Value.ToString(), ct),
+            tontine.AdhesionEnCours.ToString(), tontine.RattrapageAdhesionTardive);
     }
 
     private static string StatutMembreTour(Member m, Round? tour, IReadOnlyList<Versement> versements)

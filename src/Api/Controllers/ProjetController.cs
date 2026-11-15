@@ -66,15 +66,21 @@ public class ProjetController : ControllerBase
     public Task<IActionResult> Rejoindre([FromBody] RejoindreProjetRequest r, CancellationToken ct) =>
         Run(() => _service.RejoindreAsync(r.Code, r.Nom, r.Palier, UserId, ct));
 
-    /// <summary>The caller changes their own tier: raise applied from the next instalment, decrease pending approval.</summary>
+    /// <summary>The caller changes their own tier: applied right away or pending approval, per the project's rules.</summary>
     [HttpPut("{id:guid}/mon-palier")]
     public Task<IActionResult> ChangerMonPalier(Guid id, [FromBody] ChangerPalierRequest r, CancellationToken ct) =>
         Run(() => _service.ChangerMonPalierAsync(id, r.Palier, UserId, ct),
             x => Ok(new { statut = x.Applique ? "applique" : "en_attente_validation", projet = x.Projet }));
 
-    [HttpPost("{id:guid}/participants/{participantId:guid}/baisse-palier/{decision:regex(^(approuver|refuser)$)}")]
-    public Task<IActionResult> DeciderBaisse(Guid id, Guid participantId, string decision, CancellationToken ct) =>
-        Run(() => _service.DeciderBaisseAsync(id, participantId, decision == "approuver", UserId, Admin, ct));
+    /// <summary>Approve or refuse a pending tier change (decrease, or raise when the rules require it).</summary>
+    [HttpPost("{id:guid}/participants/{participantId:guid}/changement-palier/{decision:regex(^(approuver|refuser)$)}")]
+    public Task<IActionResult> DeciderChangementPalier(Guid id, Guid participantId, string decision, CancellationToken ct) =>
+        Run(() => _service.DeciderChangementPalierAsync(id, participantId, decision == "approuver", UserId, Admin, ct));
+
+    /// <summary>Change the project's rules (gestionnaire). Journaled.</summary>
+    [HttpPut("{id:guid}/regles")]
+    public Task<IActionResult> ModifierRegles(Guid id, [FromBody] ReglesProjetDto regles, CancellationToken ct) =>
+        Run(() => _service.ModifierReglesAsync(id, regles, UserId, Admin, ct));
 
     [HttpPost("{id:guid}/paiements")]
     public Task<IActionResult> EnregistrerPaiement(Guid id, [FromBody] PaiementProjetRequest r, CancellationToken ct) =>

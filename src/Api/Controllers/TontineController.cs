@@ -5,6 +5,7 @@ using Application.TontineManagement.Commands.AddMember;
 using Application.TontineManagement.Commands.CloturerTour;
 using Application.TontineManagement.Commands.CreateTontine;
 using Application.TontineManagement.Commands.DeciderAdhesion;
+using Application.TontineManagement.Commands.ModifierReglesAdhesion;
 using Application.TontineManagement.Commands.EnvoyerMessage;
 using Application.TontineManagement.Commands.GenererCodeInvitation;
 using Application.TontineManagement.Services;
@@ -468,6 +469,16 @@ public class TontineController : ControllerBase
         return Ok(new { statut = decision == "accepter" ? "actif" : "refuse" });
     }
 
+    // ── PUT /api/v1/tontines/{id}/regles ───────────────────────────
+    /// <summary>Late-joining rules: adhesionEnCours (Interdite | AvecValidation | Libre), rattrapageAdhesionTardive.</summary>
+    [HttpPut("{id:guid}/regles")]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
+    public async Task<IActionResult> ModifierRegles(Guid id, [FromBody] ReglesTontineRequest r, CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(new ModifierReglesAdhesionCommand(id, r.AdhesionEnCours, r.RattrapageAdhesionTardive), cancellationToken);
+        return result.IsSuccess ? Ok(await _dashboard.GetTontineAsync(id, cancellationToken)) : BadRequest(new { error = result.Error });
+    }
+
     // ── GET /api/v1/tontines/{id}/details ──────────────────────────
     /// <summary>Tontine with members (and their status in the current round) and rounds.</summary>
     [HttpGet("{id:guid}/details")]
@@ -583,3 +594,4 @@ public sealed record SuspendreMembreRequest(string Motif);
 /// </summary>
 public sealed record EnvoyerMessageRequest(string Message);
 public sealed record RelancerRequest(List<Guid>? MembreIds);
+public sealed record ReglesTontineRequest(string AdhesionEnCours, bool RattrapageAdhesionTardive);

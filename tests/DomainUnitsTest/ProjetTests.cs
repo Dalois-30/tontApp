@@ -12,17 +12,17 @@ public class ProjetTests
     private const string G = "gestionnaire";
 
     /// <summary>Monthly project, 6 instalments from 5 Jan 2026, tiers 10/15/20k.</summary>
-    private static (Projet Projet, string Code) Nouveau()
+    private static (Projet Projet, string Code) Nouveau(ReglesProjet? regles = null)
     {
         var p = Projet.Creer("Moulin à grains", "Achat d'un moulin", 1_000_000m, [10_000m, 15_000m, 20_000m],
-            TontinePeriodicity.Monthly, Debut, 6, Gestionnaire);
+            TontinePeriodicity.Monthly, Debut, 6, Gestionnaire, regles);
         var code = p.GenererCodeInvitation(30, G);
         return (p, code);
     }
 
-    private static (Projet, Guid) AvecParticipant(decimal palier = 15_000m)
+    private static (Projet, Guid) AvecParticipant(decimal palier = 15_000m, ReglesProjet? regles = null)
     {
-        var (p, code) = Nouveau();
+        var (p, code) = Nouveau(regles);
         var part = p.Rejoindre(code, "Awa", UtilisateurId.Create(), palier, Debut.AddDays(-1));
         p.Ouvrir(G);
         return (p, part.Id);
@@ -104,9 +104,9 @@ public class ProjetTests
     }
 
     [Fact]
-    public void RaisingTier_AppliesFromNextInstalment()
+    public void RaisingTier_NonRetroactive_AppliesFromNextInstalment()
     {
-        var (p, id) = AvecParticipant(10_000m);
+        var (p, id) = AvecParticipant(10_000m, new ReglesProjet { HausseRetroactive = false });
         var applique = p.ChangerPalier(id, 20_000m, "awa", new DateTime(2026, 2, 10));
 
         Assert.True(applique);
@@ -125,13 +125,13 @@ public class ProjetTests
         Assert.False(applique);
         var avant = p.Situation(id, new DateTime(2026, 2, 10));
         Assert.Equal(20_000m, avant.PalierActuel);
-        Assert.Equal(10_000m, avant.BaisseDemandee);
+        Assert.Equal(10_000m, avant.PalierDemande);
 
-        p.DeciderBaissePalier(id, true, G, new DateTime(2026, 2, 12));
+        p.DeciderChangementPalier(id, true, G, new DateTime(2026, 2, 12));
         var apres = p.Situation(id, new DateTime(2026, 2, 12));
         Assert.Equal(10_000m, apres.PalierActuel);
         Assert.Equal(20_000m, apres.Echeances[1].Palier);
-        Assert.Null(apres.BaisseDemandee);
+        Assert.Null(apres.PalierDemande);
     }
 
     [Fact]
@@ -139,10 +139,10 @@ public class ProjetTests
     {
         var (p, id) = AvecParticipant(20_000m);
         p.ChangerPalier(id, 15_000m, "awa", Debut);
-        p.DeciderBaissePalier(id, false, G, Debut);
+        p.DeciderChangementPalier(id, false, G, Debut);
 
         Assert.Equal(20_000m, p.Situation(id, Debut).PalierActuel);
-        Assert.Throws<InvalidOperationException>(() => p.DeciderBaissePalier(id, true, G, Debut));
+        Assert.Throws<InvalidOperationException>(() => p.DeciderChangementPalier(id, true, G, Debut));
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public class ProjetTests
 
         // Baisse à 10 000 demandée et approuvée en février.
         p.ChangerPalier(id, 10_000m, "mariam", new DateTime(2026, 2, 10));
-        p.DeciderBaissePalier(id, true, G, new DateTime(2026, 2, 12));
+        p.DeciderChangementPalier(id, true, G, new DateTime(2026, 2, 12));
 
         var s = p.Situation(id, new DateTime(2026, 2, 12));
 
@@ -225,7 +225,7 @@ public class ProjetTests
         var (p, id) = AvecParticipant(20_000m);
         Payer(p, id, 50_000m);
         p.ChangerPalier(id, 10_000m, "mariam", new DateTime(2026, 2, 10));
-        p.DeciderBaissePalier(id, true, G, new DateTime(2026, 2, 12));
+        p.DeciderChangementPalier(id, true, G, new DateTime(2026, 2, 12));
 
         var paiement = p.EnregistrerPaiement(id, 20_000m, "reçu", G, new DateTime(2026, 3, 1));
         p.DeciderPaiement(paiement.Id, true, G, "CASH-2", new DateTime(2026, 3, 1));
@@ -237,9 +237,9 @@ public class ProjetTests
     }
 
     [Fact]
-    public void Raise_DoesNotIncreaseInstalmentsAlreadyPaid()
+    public void Raise_NonRetroactive_DoesNotIncreaseInstalmentsAlreadyPaid()
     {
-        var (p, id) = AvecParticipant(10_000m);
+        var (p, id) = AvecParticipant(10_000m, new ReglesProjet { HausseRetroactive = false });
         Payer(p, id, 30_000m); // instalments 1-3 paid at 10 000 on 5 Jan
 
         p.ChangerPalier(id, 20_000m, "awa", new DateTime(2026, 1, 20)); // from 5 Feb
@@ -247,5 +247,97 @@ public class ProjetTests
         var s = p.Situation(id, new DateTime(2026, 1, 20));
         Assert.Equal([10_000m, 10_000m, 10_000m, 20_000m, 20_000m, 20_000m], s.Echeances.Select(e => e.Palier));
         Assert.All(s.Echeances.Take(3), e => Assert.Equal(StatutEcheance.Soldee, e.Statut));
+    }
+
+    // ── Règles configurables ─────────────────────────────────────────
+
+    [Fact]
+    public void Raise_Retroactive_ByDefault_OpensGapsOnPastInstalments_FilledFirst()
+    {
+        var (p, id) = AvecParticipant(10_000m);
+        Payer(p, id, 30_000m); // 1-3 paid at 10 000
+        p.ChangerPalier(id, 15_000m, "awa", new DateTime(2026, 1, 20));
+
+        var s = p.Situation(id, new DateTime(2026, 1, 20));
+        Assert.All(s.Echeances, e => Assert.Equal(15_000m, e.Palier));
+        Assert.Equal(StatutEcheance.Partielle, s.Echeances[0].Statut);
+        Assert.Equal(5_000m, s.ResteDuExigible); // instalment 1 (5 Jan) now owes 5 000
+
+        var pay = p.EnregistrerPaiement(id, 15_000m, "reçu", G, new DateTime(2026, 1, 21));
+        p.DeciderPaiement(pay.Id, true, G, "CASH", new DateTime(2026, 1, 21));
+        var apres = p.Situation(id, new DateTime(2026, 1, 21));
+        Assert.All(apres.Echeances.Take(3), e => Assert.Equal(StatutEcheance.Soldee, e.Statut)); // gaps filled first
+    }
+
+    [Fact]
+    public void Raise_CanRequireApproval()
+    {
+        var (p, id) = AvecParticipant(10_000m, new ReglesProjet { HausseSoumiseAValidation = true });
+        Assert.False(p.ChangerPalier(id, 20_000m, "awa", Debut));
+        Assert.Equal(10_000m, p.Situation(id, Debut).PalierActuel);
+        p.DeciderChangementPalier(id, true, G, Debut);
+        Assert.Equal(20_000m, p.Situation(id, Debut).PalierActuel);
+    }
+
+    [Fact]
+    public void Decrease_CanBeForbidden_OrImmediate()
+    {
+        var (interdit, a) = AvecParticipant(20_000m, new ReglesProjet { BaisseAutorisee = false });
+        Assert.Throws<InvalidOperationException>(() => interdit.ChangerPalier(a, 10_000m, "x", Debut));
+
+        var (libre, b) = AvecParticipant(20_000m, new ReglesProjet { BaisseSoumiseAValidation = false });
+        Assert.True(libre.ChangerPalier(b, 10_000m, "x", Debut));
+    }
+
+    [Fact]
+    public void Decrease_Retroactive_RedistributesMoneyAlreadyReceived()
+    {
+        var (p, id) = AvecParticipant(20_000m, new ReglesProjet { BaisseRetroactive = true, BaisseSoumiseAValidation = false });
+        Payer(p, id, 50_000m);
+        p.ChangerPalier(id, 10_000m, "m", new DateTime(2026, 2, 10));
+
+        var s = p.Situation(id, new DateTime(2026, 2, 10));
+        Assert.All(s.Echeances, e => Assert.Equal(10_000m, e.Palier));
+        Assert.Equal(5, s.Echeances.Count(e => e.Statut == StatutEcheance.Soldee));
+    }
+
+    [Fact]
+    public void PartialPayment_CanBeForbidden()
+    {
+        var (p, id) = AvecParticipant(15_000m, new ReglesProjet { PaiementPartielAutorise = false });
+        Assert.Throws<InvalidOperationException>(() => p.EnregistrerPaiement(id, 10_000m, "r", G, Debut));
+        p.EnregistrerPaiement(id, 15_000m, "r", G, Debut);
+    }
+
+    [Fact]
+    public void Overpayment_CanBeRefused()
+    {
+        var (p, id) = AvecParticipant(15_000m, new ReglesProjet { TropPercu = TraitementTropPercu.Refuser });
+        // On 5 Jan: instalment 1 due (15 000); the next one (5 Feb) may be paid in advance.
+        Assert.Throws<InvalidOperationException>(() => p.EnregistrerPaiement(id, 40_000m, "r", G, Debut));
+        p.EnregistrerPaiement(id, 30_000m, "r", G, Debut);
+    }
+
+    [Fact]
+    public void LateParticipant_CanOweEarlierInstalments()
+    {
+        var (p, code) = Nouveau(new ReglesProjet { RattrapageAdhesionTardive = true });
+        p.Ouvrir(G);
+        var tard = p.Rejoindre(code, "Mariam", UtilisateurId.Create(), 10_000m, new DateTime(2026, 3, 1));
+
+        var s = p.Situation(tard.Id, new DateTime(2026, 3, 1));
+        Assert.Equal(6, s.Echeances.Count);
+        Assert.Equal(20_000m, s.ResteDuExigible); // January and February to catch up
+    }
+
+    [Fact]
+    public void ModifierRegles_IsJournaled_AndForbiddenOnceClosed()
+    {
+        var (p, _) = AvecParticipant();
+        p.ModifierRegles(new ReglesProjet { BaisseAutorisee = false }, G);
+        Assert.False(p.Regles.BaisseAutorisee);
+        Assert.Equal("ReglesModifiees", p.Journal.OrderBy(j => j.Sequence).Last().Action);
+        p.Clore(G);
+        Assert.Throws<InvalidOperationException>(() => p.ModifierRegles(ReglesProjet.ParDefaut, G));
     }
 }

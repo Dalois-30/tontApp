@@ -545,6 +545,12 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("palier");
 
+                    b.Property<bool>("Retroactif")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("retroactif");
+
                     b.Property<string>("Statut")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -845,6 +851,61 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(18,2)[]")
                         .HasColumnName("paliers");
 
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Regles", "Domain.ProjectManagement.Projet.Regles#ReglesProjet", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<bool>("BaisseAutorisee")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(true)
+                                .HasColumnName("regle_baisse_autorisee");
+
+                            b1.Property<bool>("BaisseRetroactive")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false)
+                                .HasColumnName("regle_baisse_retroactive");
+
+                            b1.Property<bool>("BaisseSoumiseAValidation")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(true)
+                                .HasColumnName("regle_baisse_validation");
+
+                            b1.Property<bool>("HausseRetroactive")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(true)
+                                .HasColumnName("regle_hausse_retroactive");
+
+                            b1.Property<bool>("HausseSoumiseAValidation")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false)
+                                .HasColumnName("regle_hausse_validation");
+
+                            b1.Property<bool>("PaiementPartielAutorise")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(true)
+                                .HasColumnName("regle_paiement_partiel");
+
+                            b1.Property<bool>("RattrapageAdhesionTardive")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("boolean")
+                                .HasDefaultValue(false)
+                                .HasColumnName("regle_rattrapage_adhesion");
+
+                            b1.Property<string>("TropPercu")
+                                .IsRequired()
+                                .ValueGeneratedOnAdd()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasDefaultValue("Reporter")
+                                .HasColumnName("regle_trop_percu");
+                        });
+
                     b.HasKey("Id");
 
                     b.HasIndex("CodeInvitationHash");
@@ -908,6 +969,10 @@ namespace Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("nom");
+
+                    b.Property<int?>("PremierTourDu")
+                        .HasColumnType("integer")
+                        .HasColumnName("premier_tour_du");
 
                     b.Property<int>("Rang")
                         .HasColumnType("integer")
@@ -975,6 +1040,14 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AdhesionEnCours")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("AvecValidation")
+                        .HasColumnName("adhesion_en_cours");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -992,6 +1065,12 @@ namespace Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("nom");
+
+                    b.Property<bool>("RattrapageAdhesionTardive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("rattrapage_adhesion_tardive");
 
                     b.Property<DateTime?>("StartedAt")
                         .HasColumnType("timestamp with time zone")

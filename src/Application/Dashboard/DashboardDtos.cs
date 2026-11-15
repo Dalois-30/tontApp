@@ -38,7 +38,9 @@ public sealed record DashTontineDto(
     IReadOnlyList<DashTourDto> Tours,
     DateTime CreatedAt,
     Guid GestionnaireId,
-    string? GestionnaireNom);
+    string? GestionnaireNom,
+    string AdhesionEnCours,
+    bool RattrapageAdhesionTardive);
 
 public sealed record DashVersementDto(
     Guid Id,

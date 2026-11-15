@@ -16,6 +16,8 @@ public class Member : Entity<MemberId>
     /// Null when the member was added manually by the gestionnaire (without a user account).
     /// </summary>
     public UtilisateurId? UtilisateurId { get; private set; }
+    /// <summary>First round a late member owes (null: owes every round, i.e. catch-up).</summary>
+    public int? PremierTourDu { get; private set; }
 
     private Member() : base()
     {
@@ -40,12 +42,13 @@ public class Member : Entity<MemberId>
     }
 
     /// <summary>Approves a pending membership and places the member at <paramref name="rang"/>.</summary>
-    internal void Accepter(int rang)
+    internal void Accepter(int rang, int? premierTourDu)
     {
         if (Statut != StatutMembre.EnAttente)
             throw new InvalidOperationException("Only a pending membership can be approved.");
         Statut = StatutMembre.Actif;
         Rang = rang;
+        PremierTourDu = premierTourDu;
     }
 
     public static Member Create(string name, int rang = 0, UtilisateurId? utilisateurId = null)

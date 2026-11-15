@@ -100,8 +100,11 @@ export function RejoindreProjetScreen({ navigation }: Props): React.JSX.Element 
             </View>
             {palier !== null ? (
               <Text style={styles.hint}>
-                Engagement total : {formatMontant(palier * apercu.nombreEcheances)} sur la durée du projet
-                (pour les échéances à partir d'aujourd'hui). Le palier est un engagement : un paiement inférieur laisse un reste dû.
+                Le palier est un engagement de {formatMontant(palier)} par échéance
+                {apercu.regles.rattrapageAdhesionTardive
+                  ? ', y compris pour les échéances déjà passées (rattrapage).'
+                  : ', à partir des échéances qui suivent votre arrivée.'}
+                {apercu.regles.baisseAutorisee ? '' : ' Il ne pourra pas être baissé.'}
               </Text>
             ) : null}
             <PrimaryButton title="Rejoindre" onPress={rejoindre} loading={busy} disabled={palier === null} />

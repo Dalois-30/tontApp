@@ -15,6 +15,17 @@ export interface ProjetResume {
   monResteDu: number | null;
 }
 
+export interface ReglesProjet {
+  paiementPartielAutorise: boolean;
+  tropPercu: 'Reporter' | 'Refuser';
+  hausseRetroactive: boolean;
+  hausseSoumiseAValidation: boolean;
+  baisseAutorisee: boolean;
+  baisseSoumiseAValidation: boolean;
+  baisseRetroactive: boolean;
+  rattrapageAdhesionTardive: boolean;
+}
+
 export interface Echeance {
   numero: number;
   date: string;
@@ -28,7 +39,7 @@ export interface Participant {
   id: string;
   nom: string;
   palierActuel: number;
-  baisseDemandee: number | null;
+  palierDemande: number | null;
   totalPaye: number;
   engagementTotal: number;
   resteDuExigible: number;
@@ -52,6 +63,7 @@ export interface ProjetDetails {
   totalDepense: number;
   solde: number;
   progression: number;
+  regles: ReglesProjet;
   participants: Participant[];
   depenses: { id: string; libelle: string; montant: number; statut: string; proposeeLe: string }[];
   paiements: { id: string; montant: number; statut: string; saisiLe: string; reference: string | null }[];
@@ -66,6 +78,7 @@ export interface ProjetApercu {
   dateDebut: string;
   nombreEcheances: number;
   participants: number;
+  regles: ReglesProjet;
 }
 
 export const projetService = {
@@ -81,7 +94,7 @@ export const projetService = {
   async rejoindre(code: string, nom: string, palier: number): Promise<ProjetDetails> {
     return (await apiClient.post<ProjetDetails>('/projets/rejoindre', { code, nom, palier })).data;
   },
-  /** Raise: applied from the next instalment. Lower: waits for the gestionnaire's approval. */
+  /** Applied right away or waiting for the gestionnaire's approval, per the project's rules. */
   async changerMonPalier(id: string, palier: number): Promise<'applique' | 'en_attente_validation'> {
     return (await apiClient.put<{ statut: 'applique' | 'en_attente_validation' }>(`/projets/${id}/mon-palier`, { palier })).data.statut;
   },

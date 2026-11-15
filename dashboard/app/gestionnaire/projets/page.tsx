@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { formatMontant } from "@/lib/format";
-import type { ProjetResume } from "@/lib/types";
+import type { ProjetResume, ReglesProjet } from "@/lib/types";
+import ReglesProjetForm, { REGLES_PAR_DEFAUT } from "@/components/ReglesProjetForm";
 
 const PERIODICITES = [
   { value: "Monthly", label: "Mensuelle" },
@@ -30,6 +31,7 @@ export default function ProjetsPage() {
   const [periodicite, setPeriodicite] = useState("Monthly");
   const [dateDebut, setDateDebut] = useState(premierDuMoisProchain());
   const [nombreEcheances, setNombreEcheances] = useState("12");
+  const [regles, setRegles] = useState<ReglesProjet>(REGLES_PAR_DEFAUT);
 
   const charger = useCallback(async () => {
     setLoading(true);
@@ -62,6 +64,7 @@ export default function ProjetsPage() {
         periodicite,
         dateDebut,
         nombreEcheances: Number(nombreEcheances),
+        regles,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -137,6 +140,10 @@ export default function ProjetsPage() {
                 onChange={(e) => setNombreEcheances(e.target.value)} required
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
             </label>
+          </div>
+          <div className="border-t border-gray-200 pt-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Règles du projet</h3>
+            <ReglesProjetForm value={regles} onChange={setRegles} />
           </div>
           <button type="submit" disabled={busy}
             className="bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white text-sm font-medium rounded-md px-4 py-2">

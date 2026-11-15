@@ -126,6 +126,39 @@ public class TontineEnhancedTests
     }
 
     [Fact]
+    public void AdhesionEnCours_Interdite_RejectsLateJoin()
+    {
+        var tontine = CreateActivatedTontine();
+        tontine.ModifierReglesAdhesion(ModeAdhesionEnCours.Interdite, true);
+        var (_, code) = tontine.GenerateInvitation();
+        Assert.Throws<InvalidOperationException>(() => tontine.JoinWithInvitation("Dan", code, UtilisateurId.Create()));
+    }
+
+    [Fact]
+    public void AdhesionEnCours_Libre_AcceptsImmediatelyAtTheEnd()
+    {
+        var tontine = CreateActivatedTontine();
+        tontine.ModifierReglesAdhesion(ModeAdhesionEnCours.Libre, true);
+        var (_, code) = tontine.GenerateInvitation();
+        var dan = tontine.JoinWithInvitation("Dan", code, UtilisateurId.Create());
+        Assert.Equal(StatutMembre.Actif, dan.Statut);
+        Assert.Equal(4, dan.Rang);
+    }
+
+    [Fact]
+    public void SansRattrapage_LateMemberOwesFromTheCurrentRound()
+    {
+        var tontine = CreateActivatedTontine();
+        tontine.ModifierReglesAdhesion(ModeAdhesionEnCours.AvecValidation, rattrapage: false);
+        tontine.CloseRound(tontine.GetActiveRounds().Single().Id); // round 2 open
+        var (_, code) = tontine.GenerateInvitation();
+        var dan = tontine.JoinWithInvitation("Dan", code, UtilisateurId.Create());
+        tontine.AccepterAdhesion(dan.Id);
+
+        Assert.Equal(new[] { 2 }, tontine.ToursDusPar(dan.Id).Select(r => r.RoundNumber));
+    }
+
+    [Fact]
     public void RefuserAdhesion_RemovesThePendingRequest()
     {
         var tontine = CreateActivatedTontine();

@@ -19,6 +19,10 @@ public class Tontine : AggregateRoot<TontineId>
     public UtilisateurId GestionnaireId { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? StartedAt { get; private set; }
+    /// <summary>Joining after activation: forbidden, subject to approval (default) or free.</summary>
+    public ModeAdhesionEnCours AdhesionEnCours { get; private set; } = ModeAdhesionEnCours.AvecValidation;
+    /// <summary>A late member owes the rounds opened before they joined (default) or only from their arrival.</summary>
+    public bool RattrapageAdhesionTardive { get; private set; } = true;
 
     // Backward-compatible computed properties
     public ContributionAmount ContributionAmount => Reglement.ContributionAmount;
@@ -296,6 +300,9 @@ public class Tontine : AggregateRoot<TontineId>
         if (_members.Any(m => m.Name == memberName))
             throw new InvalidOperationException($"A member with the name '{memberName}' already exists.");
 
+        if (Status == TontineStatus.Active && AdhesionEnCours == ModeAdhesionEnCours.Interdite)
+            throw new InvalidOperationException("This tontine does not accept new members once started.");
+
         var member = Status == TontineStatus.Draft
             ? Member.Create(memberName, _members.Count + 1, utilisateurId)
             : Member.CreateEnAttente(memberName, utilisateurId);
@@ -305,6 +312,8 @@ public class Tontine : AggregateRoot<TontineId>
 
         if (member.Statut == StatutMembre.Actif)
             AddDomainEvent(new MemberAddedEvent(Id, member.Id, memberName));
+        else if (AdhesionEnCours == ModeAdhesionEnCours.Libre)
+            AccepterAdhesion(member.Id);
 
         return member;
     }
@@ -319,7 +328,11 @@ public class Tontine : AggregateRoot<TontineId>
         var member = _members.FirstOrDefault(m => m.Id == membreId)
             ?? throw new InvalidOperationException("Member not found.");
 
-        member.Accepter(_members.Max(m => m.Rang) + 1);
+        // Without catch-up, the member owes rounds from the one open when they are accepted.
+        int? premierTourDu = RattrapageAdhesionTardive
+            ? null
+            : _rounds.FirstOrDefault(r => !r.IsCompleted)?.RoundNumber ?? _rounds.Count + 1;
+        member.Accepter(_members.Max(m => m.Rang) + 1, premierTourDu);
 
         AddDomainEvent(new MemberAddedEvent(Id, member.Id, member.Name));
     }
@@ -341,8 +354,21 @@ public class Tontine : AggregateRoot<TontineId>
     /// Rounds a member owes: every round already opened before the current one where the member is
     /// not the beneficiary. A late member owes them too (arrears). Payment status is checked by the caller.
     /// </summary>
-    public IReadOnlyList<Round> ToursDusPar(MemberId membreId) =>
-        _rounds.Where(r => r.BeneficiaryId != membreId).OrderBy(r => r.RoundNumber).ToList().AsReadOnly();
+    public IReadOnlyList<Round> ToursDusPar(MemberId membreId)
+    {
+        var premier = _members.FirstOrDefault(m => m.Id == membreId)?.PremierTourDu ?? 0;
+        return _rounds.Where(r => r.BeneficiaryId != membreId && r.RoundNumber >= premier)
+            .OrderBy(r => r.RoundNumber).ToList().AsReadOnly();
+    }
+
+    /// <summary>Changes the late-joining rules. Members already accepted keep their terms.</summary>
+    public void ModifierReglesAdhesion(ModeAdhesionEnCours mode, bool rattrapage)
+    {
+        if (Status is TontineStatus.Completed or TontineStatus.Cancelled)
+            throw new InvalidOperationException("The rules of a finished tontine cannot change.");
+        AdhesionEnCours = mode;
+        RattrapageAdhesionTardive = rattrapage;
+    }
 
     // ── SuspendMember ───────────────────────────────────────────────
     public void SuspendMember(MemberId memberId)

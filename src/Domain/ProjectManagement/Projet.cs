@@ -9,13 +9,9 @@ using Domain.TontineManagement.ValueObjects;
 /// Collective project (e.g. buying a shared asset): participants commit to a tier (palier) and pay
 /// it at every instalment until the goal is reached; validated expenses are paid out of the pot.
 ///
-/// Rules agreed with the client:
-/// - The chosen tier is a commitment: a payment below it is partial, the rest stays due; the tier
-///   does not change because of a payment.
-/// - Overpayment is carried forward to the next instalments.
-/// - Raising the tier applies from the next instalment; lowering it is a request the gestionnaire
-///   must approve (second validation).
-/// - Money stays outside the app: payments and expenses are entered, then validated.
+/// The chosen tier is a commitment: payments never change it. How partial payments, overpayment,
+/// tier changes and late arrivals are handled is configured per project (<see cref="ReglesProjet"/>).
+/// Money stays outside the app: payments and expenses are entered, then validated.
 /// </summary>
 public sealed class Projet : AggregateRoot<ProjetId>
 {
@@ -35,6 +31,7 @@ public sealed class Projet : AggregateRoot<ProjetId>
     public StatutProjet Statut { get; private set; }
     public UtilisateurId GestionnaireId { get; private set; } = default!;
     public DateTime CreatedAt { get; private set; }
+    public ReglesProjet Regles { get; private set; } = ReglesProjet.ParDefaut;
     public string? CodeInvitationHash { get; private set; }
     public DateTime? CodeInvitationExpireLe { get; private set; }
 
@@ -48,7 +45,8 @@ public sealed class Projet : AggregateRoot<ProjetId>
 
     public static Projet Creer(
         string nom, string? description, decimal objectif, IEnumerable<decimal> paliers,
-        TontinePeriodicity periodicite, DateTime dateDebut, int nombreEcheances, UtilisateurId gestionnaireId)
+        TontinePeriodicity periodicite, DateTime dateDebut, int nombreEcheances, UtilisateurId gestionnaireId,
+        ReglesProjet? regles = null)
     {
         if (string.IsNullOrWhiteSpace(nom)) throw new ArgumentException("Project name must not be empty.", nameof(nom));
         if (objectif <= 0) throw new ArgumentException("The goal must be greater than zero.", nameof(objectif));
@@ -70,9 +68,10 @@ public sealed class Projet : AggregateRoot<ProjetId>
             Statut = StatutProjet.Brouillon,
             GestionnaireId = gestionnaireId,
             CreatedAt = DateTime.UtcNow,
+            Regles = regles ?? ReglesProjet.ParDefaut,
         };
         p._paliers.AddRange(liste);
-        p.Journaliser("ProjetCree", gestionnaireId.Value.ToString(), new { p.Nom, p.Objectif, Paliers = liste, p.DateDebut, p.NombreEcheances });
+        p.Journaliser("ProjetCree", gestionnaireId.Value.ToString(), new { p.Nom, p.Objectif, Paliers = liste, p.DateDebut, p.NombreEcheances, p.Regles });
         return p;
     }
 
@@ -105,6 +104,15 @@ public sealed class Projet : AggregateRoot<ProjetId>
         if (Statut != StatutProjet.Ouvert) throw new InvalidOperationException("Only an open project can be closed.");
         Statut = StatutProjet.Clos;
         Journaliser("ProjetClos", acteur, new { Solde = Solde });
+    }
+
+    /// <summary>Changes the project's rules (journaled). Tier changes keep the retroactivity chosen when they were made.</summary>
+    public void ModifierRegles(ReglesProjet regles, string acteur)
+    {
+        if (Statut is StatutProjet.Clos or StatutProjet.Annule)
+            throw new InvalidOperationException("The rules of a closed project cannot change.");
+        Regles = regles;
+        Journaliser("ReglesModifiees", acteur, regles);
     }
 
     // ── Membership ──────────────────────────────────────────────────
@@ -148,34 +156,49 @@ public sealed class Projet : AggregateRoot<ProjetId>
     // ── Tier changes ────────────────────────────────────────────────
 
     /// <summary>
-    /// Raise: applied from the next instalment. Lower: pending until the gestionnaire approves it.
-    /// Returns true when the change is applied right away.
+    /// Changes a participant's tier according to the project's rules (raise/decrease, approval,
+    /// retroactivity). Returns true when the change is applied right away, false when it awaits approval.
     /// </summary>
     public bool ChangerPalier(Guid participantId, decimal nouveau, string acteur, DateTime maintenant)
     {
+        if (Statut is StatutProjet.Clos or StatutProjet.Annule)
+            throw new InvalidOperationException("The project is closed.");
         var p = Participant(participantId);
         if (!_paliers.Contains(nouveau)) throw new InvalidOperationException("This tier is not offered by the project.");
-        var prochaine = ProchaineEcheance(maintenant);
-        var actuel = p.PalierAu(prochaine, maintenant);
+        var actuel = PalierCourant(p, maintenant);
         if (nouveau == actuel) throw new InvalidOperationException("This is already the participant's tier.");
 
         var hausse = nouveau > actuel;
-        p.AjouterChangement(new ChangementPalier(nouveau, prochaine,
-            hausse ? StatutChangementPalier.Applique : StatutChangementPalier.EnAttente, maintenant));
-        Journaliser(hausse ? "PalierAugmente" : "BaissePalierDemandee", acteur,
-            new { ParticipantId = participantId, Ancien = actuel, Nouveau = nouveau, ApplicableDes = prochaine });
-        return hausse;
+        if (!hausse && !Regles.BaisseAutorisee)
+            throw new InvalidOperationException("Lowering the tier is not allowed in this project.");
+        var validation = hausse ? Regles.HausseSoumiseAValidation : Regles.BaisseSoumiseAValidation;
+        var retroactif = hausse ? Regles.HausseRetroactive : Regles.BaisseRetroactive;
+        var applicableDes = retroactif ? DateTime.MinValue : ProchaineEcheance(maintenant);
+
+        p.AjouterChangement(new ChangementPalier(nouveau, applicableDes,
+            validation ? StatutChangementPalier.EnAttente : StatutChangementPalier.Applique, maintenant, maintenant, retroactif));
+        Journaliser(validation ? "ChangementPalierDemande" : hausse ? "PalierAugmente" : "PalierBaisse", acteur,
+            new { ParticipantId = participantId, Ancien = actuel, Nouveau = nouveau, Retroactif = retroactif, ApplicableDes = applicableDes });
+        return !validation;
     }
 
-    public void DeciderBaissePalier(Guid participantId, bool approuver, string acteur, DateTime maintenant)
+    public void DeciderChangementPalier(Guid participantId, bool approuver, string acteur, DateTime maintenant)
     {
-        var demande = Participant(participantId).BaisseEnAttente
-            ?? throw new InvalidOperationException("No pending tier decrease for this participant.");
-        // An approval that comes late applies from the next instalment still to come.
-        DateTime? applicable = approuver && demande.ApplicableDes <= maintenant.Date ? ProchaineEcheance(maintenant) : null;
+        var demande = Participant(participantId).ChangementEnAttente
+            ?? throw new InvalidOperationException("No pending tier change for this participant.");
+        // A non-retroactive change approved late applies from the next instalment still to come.
+        DateTime? applicable = approuver && !demande.Retroactif && demande.ApplicableDes <= maintenant.Date
+            ? ProchaineEcheance(maintenant) : null;
         demande.Decider(approuver, maintenant, applicable);
-        Journaliser(approuver ? "BaissePalierApprouvee" : "BaissePalierRefusee", acteur,
-            new { ParticipantId = participantId, demande.Palier, demande.ApplicableDes });
+        Journaliser(approuver ? "ChangementPalierApprouve" : "ChangementPalierRefuse", acteur,
+            new { ParticipantId = participantId, demande.Palier, demande.ApplicableDes, demande.Retroactif });
+    }
+
+    private decimal PalierCourant(Participant p, DateTime maintenant)
+    {
+        var echeances = Echeancier();
+        var reference = echeances.FirstOrDefault(d => d > maintenant.Date);
+        return p.PalierAu(reference == default ? echeances[^1] : reference, maintenant);
     }
 
     // ── Payments ────────────────────────────────────────────────────
@@ -184,7 +207,23 @@ public sealed class Projet : AggregateRoot<ProjetId>
     {
         if (Statut != StatutProjet.Ouvert) throw new InvalidOperationException("Payments are only possible on an open project.");
         if (montant <= 0) throw new ArgumentException("Amount must be greater than zero.", nameof(montant));
-        Participant(participantId);
+        var situation = Situation(participantId, maintenant);
+        var enAttente = _paiements.Where(x => x.ParticipantId == participantId && x.Statut == StatutOperation.Saisie).Sum(x => x.Montant);
+        if (!Regles.PaiementPartielAutorise)
+        {
+            var plusAncien = situation.Echeances.FirstOrDefault(e => e.Reste > 0);
+            if (plusAncien is not null && montant + enAttente < plusAncien.Reste)
+                throw new InvalidOperationException(
+                    $"Partial payments are not allowed: at least {plusAncien.Reste:N0} {Devise} is expected (instalment {plusAncien.Numero}).");
+        }
+        if (Regles.TropPercu == TraitementTropPercu.Refuser)
+        {
+            var prochaine = situation.Echeances.FirstOrDefault(e => e.Date > maintenant.Date && e.Reste > 0);
+            var maximum = situation.ResteDuExigible + (prochaine?.Reste ?? 0) - enAttente;
+            if (montant > maximum)
+                throw new InvalidOperationException(
+                    $"Overpayment is not allowed: at most {Math.Max(0, maximum):N0} {Devise} can be received now.");
+        }
         var paiement = new PaiementProjet(participantId, montant, preuve, acteur, maintenant);
         _paiements.Add(paiement);
         Journaliser("PaiementSaisi", acteur, new { PaiementId = paiement.Id, ParticipantId = participantId, Montant = montant, Preuve = preuve });
@@ -234,62 +273,81 @@ public sealed class Projet : AggregateRoot<ProjetId>
     /// <summary>Logical balance: validated payments minus validated expenses.</summary>
     public decimal Solde => TotalCollecte - TotalDepense;
 
+    /// <summary>
+    /// Position of a participant. Validated payments are replayed in validation order: each fills the
+    /// oldest instalments with the tier in force at that instant. A non-retroactive tier change only
+    /// affects instalments that had received no money before it took effect; a retroactive one affects
+    /// all of them (a retroactive raise opens a gap on past instalments, filled first by later money;
+    /// a retroactive decrease frees money that is carried to the next gaps). Money beyond everything due
+    /// is kept as credit.
+    /// </summary>
     public SituationParticipant Situation(Guid participantId, DateTime maintenant)
     {
         var p = Participant(participantId);
         var aujourdhui = maintenant.Date;
         var dues = Echeancier()
             .Select((d, i) => (Numero: i + 1, Date: d))
-            .Where(e => e.Date >= p.DateAdhesion.Date)
+            .Where(e => Regles.RattrapageAdhesionTardive || e.Date >= p.DateAdhesion.Date)
             .ToList();
+        var n = dues.Count;
+        var premier = new DateTime?[n];
+        var paye = new decimal[n];
+        decimal credit = 0;
 
-        // Validated payments are replayed in validation order. Each one fills the oldest instalments
-        // with the tier known at that instant; once an instalment has received money its amount is
-        // locked, so a later tier change never redistributes money already received.
+        void Repartir(ref decimal montant, DateTime instant)
+        {
+            for (var i = 0; i < n && montant > 0; i++)
+            {
+                var part = Math.Min(p.PalierAu(dues[i].Date, instant, premier[i]) - paye[i], montant);
+                if (part <= 0) continue;
+                premier[i] ??= instant;
+                paye[i] += part;
+                montant -= part;
+            }
+        }
+
         var paiements = _paiements
             .Where(x => x.ParticipantId == participantId && x.Statut == StatutOperation.Validee)
             .OrderBy(x => x.DecideLe ?? x.SaisiLe)
             .ToList();
-        var totalPaye = paiements.Sum(x => x.Montant);
-        var du = new decimal?[dues.Count];   // locked amount due per instalment
-        var paye = new decimal[dues.Count];
-        decimal credit = 0;
         foreach (var paiement in paiements)
         {
-            var instant = paiement.DecideLe ?? paiement.SaisiLe;
             var reste = paiement.Montant;
-            for (var i = 0; i < dues.Count && reste > 0; i++)
-            {
-                du[i] ??= p.PalierAu(dues[i].Date, instant);
-                var part = Math.Min(du[i]!.Value - paye[i], reste);
-                if (part <= 0) continue;
-                paye[i] += part;
-                reste -= part;
-            }
+            Repartir(ref reste, paiement.DecideLe ?? paiement.SaisiLe);
             credit += reste;
         }
 
-        var echeances = new List<EcheanceSituation>();
-        for (var i = 0; i < dues.Count; i++)
+        // Amounts due today; money above a (retroactively lowered) amount goes back to the pot.
+        var du = new decimal[n];
+        for (var i = 0; i < n; i++)
         {
-            var (numero, date) = dues[i];
-            var palier = du[i] ?? p.PalierAu(date, maintenant);
-            var restant = palier - paye[i];
+            du[i] = p.PalierAu(dues[i].Date, maintenant, premier[i]);
+            if (paye[i] > du[i]) { credit += paye[i] - du[i]; paye[i] = du[i]; }
+        }
+        // Credit fills the remaining gaps, oldest first (e.g. after a retroactive raise).
+        for (var i = 0; i < n && credit > 0; i++)
+        {
+            var part = Math.Min(du[i] - paye[i], credit);
+            if (part <= 0) continue;
+            paye[i] += part;
+            credit -= part;
+        }
+
+        var echeances = Enumerable.Range(0, n).Select(i =>
+        {
+            var restant = du[i] - paye[i];
             var statut = restant <= 0 ? StatutEcheance.Soldee
                 : paye[i] > 0 ? StatutEcheance.Partielle
-                : date <= aujourdhui ? StatutEcheance.EnRetard
+                : dues[i].Date <= aujourdhui ? StatutEcheance.EnRetard
                 : StatutEcheance.AVenir;
-            echeances.Add(new EcheanceSituation(numero, date, palier, paye[i], Math.Max(0, restant), statut));
-        }
-        var aRepartir = credit;
+            return new EcheanceSituation(dues[i].Numero, dues[i].Date, du[i], paye[i], Math.Max(0, restant), statut);
+        }).ToList();
 
         var exigible = echeances.Where(e => e.Date <= aujourdhui).Sum(e => e.Reste);
-        var avance = echeances.Where(e => e.Date > aujourdhui).Sum(e => e.Paye) + aRepartir;
-        var prochaine = Echeancier().FirstOrDefault(d => d > aujourdhui);
-        var palierActuel = p.PalierAu(prochaine == default ? aujourdhui : prochaine, maintenant);
+        var avance = echeances.Where(e => e.Date > aujourdhui).Sum(e => e.Paye) + credit;
 
-        return new SituationParticipant(participantId, p.Nom, palierActuel, p.BaisseEnAttente?.Palier, totalPaye,
-            echeances.Sum(e => e.Palier), exigible, avance, echeances);
+        return new SituationParticipant(participantId, p.Nom, PalierCourant(p, maintenant), p.ChangementEnAttente?.Palier,
+            paiements.Sum(x => x.Montant), echeances.Sum(e => e.Palier), exigible, avance, echeances);
     }
 
     public bool VerifierJournal()

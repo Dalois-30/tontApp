@@ -18,6 +18,30 @@ public sealed class ProjetId : ValueObject
 
 public enum StatutProjet { Brouillon, Ouvert, Clos, Annule }
 
+public enum TraitementTropPercu { Reporter, Refuser }
+
+/// <summary>
+/// Business rules of a project, chosen by the gestionnaire (defaults = rules agreed with the client).
+/// </summary>
+public sealed class ReglesProjet
+{
+    /// <summary>A payment below the remaining amount of the oldest unpaid instalment is accepted (partial).</summary>
+    public bool PaiementPartielAutorise { get; init; } = true;
+    /// <summary>What happens to money beyond what is currently due: carried forward, or the payment is refused.</summary>
+    public TraitementTropPercu TropPercu { get; init; } = TraitementTropPercu.Reporter;
+    /// <summary>A raise also applies to past instalments: the difference becomes due and is filled first.</summary>
+    public bool HausseRetroactive { get; init; } = true;
+    public bool HausseSoumiseAValidation { get; init; }
+    public bool BaisseAutorisee { get; init; } = true;
+    public bool BaisseSoumiseAValidation { get; init; } = true;
+    /// <summary>A decrease also applies to past instalments: money already received is redistributed.</summary>
+    public bool BaisseRetroactive { get; init; }
+    /// <summary>A participant joining late owes the instalments due before their arrival.</summary>
+    public bool RattrapageAdhesionTardive { get; init; }
+
+    public static ReglesProjet ParDefaut => new();
+}
+
 /// <summary>Lifecycle of a payment or an expense: entered, then validated or rejected.</summary>
 public enum StatutOperation { Saisie, Validee, Rejetee }
 
@@ -47,20 +71,22 @@ public sealed class Participant : Entity<Guid>
     }
 
     /// <summary>
-    /// Tier of an instalment due on <paramref name="date"/>, as known at instant <paramref name="au"/>:
-    /// only changes that had taken effect by then count. A change never reaches back before it took effect.
+    /// Tier of the instalment due on <paramref name="date"/> as of <paramref name="au"/>.
+    /// A non-retroactive change only counts for instalments that had received no money before it took
+    /// effect (<paramref name="premierPaiement"/>); a retroactive change counts for every instalment.
     /// </summary>
-    public decimal PalierAu(DateTime date, DateTime au) => _changements
-        .Where(c => c.Statut == StatutChangementPalier.Applique && c.ApplicableDes <= date && c.EffectifLe <= au)
+    public decimal PalierAu(DateTime date, DateTime au, DateTime? premierPaiement = null) => _changements
+        .Where(c => c.Statut == StatutChangementPalier.Applique && c.EffectifLe <= au
+                    && (c.Retroactif || (c.ApplicableDes <= date && (premierPaiement is null || c.EffectifLe <= premierPaiement))))
         .OrderBy(c => c.EffectifLe).ThenBy(c => c.ApplicableDes)
         .Last().Palier;
 
-    public ChangementPalier? BaisseEnAttente => _changements.FirstOrDefault(c => c.Statut == StatutChangementPalier.EnAttente);
+    /// <summary>Tier change waiting for the gestionnaire's approval (at most one).</summary>
+    public ChangementPalier? ChangementEnAttente => _changements.FirstOrDefault(c => c.Statut == StatutChangementPalier.EnAttente);
 
     internal void AjouterChangement(ChangementPalier c)
     {
-        if (c.Statut == StatutChangementPalier.EnAttente)
-            BaisseEnAttente?.Decider(false, c.DemandeLe); // a new decrease request replaces the previous one
+        ChangementEnAttente?.Decider(false, c.DemandeLe); // a new request replaces a pending one
         _changements.Add(c);
     }
 }
@@ -77,12 +103,15 @@ public sealed class ChangementPalier : Entity<Guid>
     /// before that instant keeps the allocation it had; null while pending or refused.
     /// </summary>
     public DateTime? EffectifLe { get; private set; }
+    /// <summary>Applies to every instalment, including those already paid (per the project's rules when requested).</summary>
+    public bool Retroactif { get; private set; }
 
     private ChangementPalier() { }
 
     internal ChangementPalier(decimal palier, DateTime applicableDes, StatutChangementPalier statut, DateTime demandeLe,
-        DateTime? effectifLe = null) : base(Guid.NewGuid())
+        DateTime? effectifLe = null, bool retroactif = false) : base(Guid.NewGuid())
     {
+        Retroactif = retroactif;
         Palier = palier;
         ApplicableDes = applicableDes;
         Statut = statut;
@@ -219,7 +248,7 @@ public sealed record SituationParticipant(
     Guid ParticipantId,
     string Nom,
     decimal PalierActuel,
-    decimal? BaisseDemandee,
+    decimal? PalierDemande,
     decimal TotalPaye,
     decimal EngagementTotal,
     decimal ResteDuExigible,

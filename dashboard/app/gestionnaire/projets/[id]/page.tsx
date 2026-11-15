@@ -3,7 +3,8 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { formatMontant, formatDate } from "@/lib/format";
-import type { ParticipantProjet, ProjetDetails } from "@/lib/types";
+import type { ParticipantProjet, ProjetDetails, ReglesProjet } from "@/lib/types";
+import ReglesProjetForm from "@/components/ReglesProjetForm";
 import StatusBadge from "@/components/StatusBadge";
 
 const ECHEANCE_STYLE: Record<string, string> = {
@@ -36,6 +37,7 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
   const [justificatif, setJustificatif] = useState("");
   const [motif, setMotif] = useState("");
   const [aRejeter, setARejeter] = useState<{ type: "paiements" | "depenses"; id: string } | null>(null);
+  const [regles, setRegles] = useState<ReglesProjet | null>(null);
 
   const charger = useCallback(async () => {
     const res = await fetch(`/api/projets/${id}`);
@@ -74,7 +76,7 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
 
   const enAttente = p.paiements.filter((x) => x.statut === "en_attente");
   const depensesEnAttente = p.depenses.filter((x) => x.statut === "en_attente");
-  const baisses = p.participants.filter((x) => x.baisseDemandee !== null);
+  const demandes = p.participants.filter((x) => x.palierDemande !== null);
   const choisi = p.participants.find((x) => x.id === payeur);
 
   function choisirPayeur(pid: string) {
@@ -156,19 +158,19 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
         </div>
       </div>
 
-      {/* ── Baisses de palier à approuver ─────────────────────────── */}
-      {baisses.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6 border border-blue-200" data-testid="baisses">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Demandes de baisse de palier</h2>
-          <p className="text-sm text-gray-500 mb-4">Une baisse d&apos;engagement demande votre validation. Elle s&apos;applique aux échéances à venir.</p>
+      {/* ── Changements de palier à valider ──────────────────────── */}
+      {demandes.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6 border border-blue-200" data-testid="demandes-palier">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Changements de palier à valider</h2>
+          <p className="text-sm text-gray-500 mb-4">Les règles du projet soumettent ces changements à votre validation.</p>
           <ul className="divide-y divide-gray-200">
-            {baisses.map((x) => (
+            {demandes.map((x) => (
               <li key={x.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
-                <span><b>{x.nom}</b> : {formatMontant(x.palierActuel)} → {formatMontant(x.baisseDemandee!)}</span>
+                <span><b>{x.nom}</b> : {formatMontant(x.palierActuel)} → {formatMontant(x.palierDemande!)}</span>
                 <span className="flex gap-2">
-                  <button disabled={busy} onClick={() => action(`/participants/${x.id}/baisse-palier/approuver`, {}, `Baisse approuvée pour ${x.nom}.`)}
+                  <button disabled={busy} onClick={() => action(`/participants/${x.id}/changement-palier/approuver`, {}, `Changement approuvé pour ${x.nom}.`)}
                     className="bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-md px-3 py-1.5 disabled:opacity-50">Approuver</button>
-                  <button disabled={busy} onClick={() => action(`/participants/${x.id}/baisse-palier/refuser`, {}, `Baisse refusée : ${x.nom} garde son palier.`)}
+                  <button disabled={busy} onClick={() => action(`/participants/${x.id}/changement-palier/refuser`, {}, `Changement refusé : ${x.nom} garde son palier.`)}
                     className="border border-gray-300 hover:border-red-400 text-sm font-medium rounded-md px-3 py-1.5 disabled:opacity-50">Refuser</button>
                 </span>
               </li>
@@ -412,6 +414,30 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
           </table>
         </div>
         {depensesEnAttente.length > 0 && <p className="text-xs text-gray-500">{depensesEnAttente.length} dépense(s) à valider.</p>}
+      </div>
+
+      {/* ── Règles ───────────────────────────────────────────────── */}
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6 space-y-4" data-testid="regles">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Règles du projet</h2>
+            <p className="text-sm text-gray-500">Chaque modification est inscrite au journal. Un changement de palier déjà fait garde la règle en vigueur à sa demande.</p>
+          </div>
+          {p.statut !== "Clos" && p.statut !== "Annule" && (
+            regles === null ? (
+              <button onClick={() => setRegles(p.regles)} className="border border-gray-300 hover:border-green-700 text-sm font-medium rounded-md px-4 py-2">
+                Modifier
+              </button>
+            ) : (
+              <span className="flex gap-2">
+                <button disabled={busy} onClick={async () => { if (await action("/regles", regles, "Règles enregistrées.", "PUT")) setRegles(null); }}
+                  className="bg-green-700 hover:bg-green-800 text-white text-sm font-medium rounded-md px-4 py-2 disabled:opacity-50">Enregistrer</button>
+                <button onClick={() => setRegles(null)} className="text-sm text-gray-600 px-2">Annuler</button>
+              </span>
+            )
+          )}
+        </div>
+        <ReglesProjetForm value={regles ?? p.regles} onChange={setRegles} disabled={regles === null} />
       </div>
 
       {/* ── Journal ──────────────────────────────────────────────── */}

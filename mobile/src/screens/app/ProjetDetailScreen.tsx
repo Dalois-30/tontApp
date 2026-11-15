@@ -39,13 +39,19 @@ export function ProjetDetailScreen({ route }: Props): React.JSX.Element {
 
   const changerPalier = useCallback((palier: number) => {
     if (!p || !moi || palier === moi.palierActuel) return;
+    const r = p.regles;
     const baisse = palier < moi.palierActuel;
+    const validation = baisse ? r.baisseSoumiseAValidation : r.hausseSoumiseAValidation;
+    const retro = baisse ? r.baisseRetroactive : r.hausseRetroactive;
+    const portee = retro
+      ? baisse
+        ? 'Elle s\'applique aussi aux échéances passées : l\'argent déjà versé sera réparti au nouveau palier.'
+        : 'Elle s\'applique aussi aux échéances passées : la différence devient due et sera réglée en premier.'
+      : 'Elle s\'applique à partir de la prochaine échéance ; ce qui est déjà versé ne change pas.';
     Alert.alert(
       baisse ? 'Baisser mon palier' : 'Augmenter mon palier',
-      baisse
-        ? `Passer de ${formatMontant(moi.palierActuel)} à ${formatMontant(palier)} par échéance ? ` +
-          'Une baisse d\'engagement doit être validée par le gestionnaire.'
-        : `Passer de ${formatMontant(moi.palierActuel)} à ${formatMontant(palier)} par échéance, dès la prochaine échéance ?`,
+      `Passer de ${formatMontant(moi.palierActuel)} à ${formatMontant(palier)} par échéance ? ${portee}` +
+        (validation ? ' Le gestionnaire doit valider ce changement.' : ''),
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -56,10 +62,10 @@ export function ProjetDetailScreen({ route }: Props): React.JSX.Element {
               const statut = await projetService.changerMonPalier(projetId, palier);
               await refetch();
               Alert.alert(
-                statut === 'applique' ? 'Palier augmenté' : 'Demande envoyée',
+                statut === 'applique' ? 'Palier modifié' : 'Demande envoyée',
                 statut === 'applique'
-                  ? 'Votre nouveau palier s\'applique à partir de la prochaine échéance.'
-                  : 'Votre demande de baisse attend la validation du gestionnaire. Votre palier actuel reste dû en attendant.',
+                  ? 'Votre nouveau palier est pris en compte.'
+                  : 'Votre demande attend la validation du gestionnaire. Votre palier actuel reste dû en attendant.',
               );
             } catch (e) {
               Alert.alert('Changement impossible', messageErreur(e));
@@ -100,8 +106,8 @@ export function ProjetDetailScreen({ route }: Props): React.JSX.Element {
           <Text style={styles.section}>Mon engagement</Text>
           <View style={styles.card}>
             <View style={styles.row}><Text style={styles.label}>Mon palier</Text><Text style={styles.strong}>{formatMontant(moi.palierActuel)} / échéance</Text></View>
-            {moi.baisseDemandee !== null ? (
-              <Text style={styles.pending}>Baisse à {formatMontant(moi.baisseDemandee)} en attente de validation</Text>
+            {moi.palierDemande !== null ? (
+              <Text style={styles.pending}>Passage à {formatMontant(moi.palierDemande)} en attente de validation</Text>
             ) : null}
             <View style={styles.row}><Text style={styles.label}>Déjà payé</Text><Text style={styles.value}>{formatMontant(moi.totalPaye)}</Text></View>
             <View style={styles.row}>
@@ -110,7 +116,12 @@ export function ProjetDetailScreen({ route }: Props): React.JSX.Element {
             </View>
             <View style={styles.row}><Text style={styles.label}>Avance (échéances futures)</Text><Text style={styles.value}>{formatMontant(moi.avance)}</Text></View>
             <Text style={styles.hint}>
-              Payer moins que le palier laisse un reste dû ; un trop-perçu est reporté sur les échéances suivantes.
+              {p.regles.paiementPartielAutorise
+                ? 'Payer moins que le palier laisse un reste dû. '
+                : 'Chaque versement doit couvrir au moins une échéance complète. '}
+              {p.regles.tropPercu === 'Reporter'
+                ? 'Un trop-perçu est reporté sur les échéances suivantes. '
+                : 'Un versement supérieur à ce qui est dû est refusé. '}
               Remettez vos paiements au gestionnaire : ils apparaissent ici une fois validés.
             </Text>
           </View>
@@ -119,7 +130,7 @@ export function ProjetDetailScreen({ route }: Props): React.JSX.Element {
             <>
               <Text style={styles.section}>Changer de palier</Text>
               <View style={styles.chips}>
-                {p.paliers.map((pal) => (
+                {p.paliers.filter((pal) => p.regles.baisseAutorisee || pal >= moi.palierActuel).map((pal) => (
                   <TouchableOpacity
                     key={pal}
                     disabled={busy}
@@ -132,7 +143,14 @@ export function ProjetDetailScreen({ route }: Props): React.JSX.Element {
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.hint}>Hausse : immédiate pour les prochaines échéances. Baisse : validée par le gestionnaire.</Text>
+              <Text style={styles.hint}>
+                Hausse : {p.regles.hausseSoumiseAValidation ? 'validée par le gestionnaire' : 'immédiate'}
+                {p.regles.hausseRetroactive ? ', anciennes échéances complétées' : ', à partir de la prochaine échéance'}.
+                {p.regles.baisseAutorisee
+                  ? ` Baisse : ${p.regles.baisseSoumiseAValidation ? 'validée par le gestionnaire' : 'immédiate'}` +
+                    (p.regles.baisseRetroactive ? ', appliquée aux échéances passées.' : ', sans toucher à ce qui est déjà versé.')
+                  : ' Baisse non autorisée dans ce projet.'}
+              </Text>
             </>
           ) : null}
 

@@ -92,6 +92,16 @@ internal sealed class TontineConfiguration : IEntityTypeConfiguration<Tontine>
                 .HasDefaultValue(3);
         });
 
+        builder.Property(t => t.AdhesionEnCours)
+            .HasColumnName("adhesion_en_cours")
+            .HasMaxLength(20)
+            .HasConversion(v => v.ToString(), v => Enum.Parse<ModeAdhesionEnCours>(v))
+            .HasDefaultValue(ModeAdhesionEnCours.AvecValidation);
+
+        builder.Property(t => t.RattrapageAdhesionTardive)
+            .HasColumnName("rattrapage_adhesion_tardive")
+            .HasDefaultValue(true);
+
         // Members navigation
         builder.HasMany(t => t.Members)
             .WithOne()
@@ -160,6 +170,9 @@ internal sealed class MemberConfiguration : IEntityTypeConfiguration<Member>
         builder.Property(m => m.JoinedAt)
             .HasColumnName("joined_at")
             .IsRequired();
+
+        builder.Property(m => m.PremierTourDu)
+            .HasColumnName("premier_tour_du");
 
         builder.Property(m => m.UtilisateurId)
             .HasColumnName("utilisateur_id")

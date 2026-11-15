@@ -7,15 +7,44 @@ using Domain.TontineManagement.ValueObjects;
 
 // ── DTOs (camelCase JSON, consumed by the dashboard and the mobile app) ─────
 
+/// <summary>Configurable rules (JSON). Missing fields take the defaults agreed with the client.</summary>
+public sealed record ReglesProjetDto(
+    bool PaiementPartielAutorise = true,
+    string TropPercu = "Reporter",
+    bool HausseRetroactive = true,
+    bool HausseSoumiseAValidation = false,
+    bool BaisseAutorisee = true,
+    bool BaisseSoumiseAValidation = true,
+    bool BaisseRetroactive = false,
+    bool RattrapageAdhesionTardive = false)
+{
+    public static ReglesProjetDto From(ReglesProjet r) => new(r.PaiementPartielAutorise, r.TropPercu.ToString(),
+        r.HausseRetroactive, r.HausseSoumiseAValidation, r.BaisseAutorisee, r.BaisseSoumiseAValidation, r.BaisseRetroactive,
+        r.RattrapageAdhesionTardive);
+
+    public ReglesProjet ToDomain() => new()
+    {
+        PaiementPartielAutorise = PaiementPartielAutorise,
+        TropPercu = Enum.TryParse<TraitementTropPercu>(TropPercu, true, out var t)
+            ? t : throw new ArgumentException("TropPercu must be Reporter or Refuser."),
+        HausseRetroactive = HausseRetroactive,
+        HausseSoumiseAValidation = HausseSoumiseAValidation,
+        BaisseAutorisee = BaisseAutorisee,
+        BaisseSoumiseAValidation = BaisseSoumiseAValidation,
+        BaisseRetroactive = BaisseRetroactive,
+        RattrapageAdhesionTardive = RattrapageAdhesionTardive,
+    };
+}
+
 public sealed record CreerProjetRequest(string Nom, string? Description, decimal Objectif, List<decimal> Paliers,
-    string Periodicite, DateTime DateDebut, int NombreEcheances);
+    string Periodicite, DateTime DateDebut, int NombreEcheances, ReglesProjetDto? Regles = null);
 
 public sealed record ProjetResumeDto(Guid Id, string Nom, string Statut, string Role, decimal Objectif, decimal TotalCollecte,
     double Progression, int Participants, decimal? MonPalier, decimal? MonResteDu, DateTime DateDebut);
 
 public sealed record EcheanceDto(int Numero, DateTime Date, decimal Palier, decimal Paye, decimal Reste, string Statut);
 
-public sealed record ParticipantDto(Guid Id, string Nom, decimal PalierActuel, decimal? BaisseDemandee, decimal TotalPaye,
+public sealed record ParticipantDto(Guid Id, string Nom, decimal PalierActuel, decimal? PalierDemande, decimal TotalPaye,
     decimal EngagementTotal, decimal ResteDuExigible, decimal Avance, DateTime DateAdhesion, IReadOnlyList<EcheanceDto>? Echeances);
 
 public sealed record PaiementProjetDto(Guid Id, Guid ParticipantId, string ParticipantNom, decimal Montant, string Preuve,
@@ -30,12 +59,12 @@ public sealed record ProjetDetailsDto(
     Guid Id, string Nom, string? Description, decimal Objectif, string Devise, IReadOnlyList<decimal> Paliers,
     string Periodicite, DateTime DateDebut, int NombreEcheances, IReadOnlyList<DateTime> Echeancier, string Statut,
     string Role, Guid? MonParticipantId, decimal TotalCollecte, decimal TotalDepense, decimal Solde, double Progression,
-    bool? JournalValide, DateTime? CodeInvitationExpireLe,
+    bool? JournalValide, DateTime? CodeInvitationExpireLe, ReglesProjetDto Regles,
     IReadOnlyList<ParticipantDto> Participants, IReadOnlyList<PaiementProjetDto> Paiements, IReadOnlyList<DepenseDto> Depenses,
     IReadOnlyList<JournalDto>? Journal);
 
 public sealed record ProjetApercuDto(string Nom, string? Description, decimal Objectif, IReadOnlyList<decimal> Paliers,
-    string Periodicite, DateTime DateDebut, int NombreEcheances, int Participants);
+    string Periodicite, DateTime DateDebut, int NombreEcheances, int Participants, ReglesProjetDto Regles);
 
 public sealed class ProjetIntrouvableException(string message = "Project not found.") : Exception(message);
 public sealed class AccesProjetRefuseException(string message = "You do not have access to this project.") : Exception(message);
@@ -112,7 +141,7 @@ public sealed class ProjetService
             var detail = gestion || x.Id == moi?.Id
                 ? s.Echeances.Select(e => new EcheanceDto(e.Numero, e.Date, e.Palier, e.Paye, e.Reste, StatutEcheanceTexte(e.Statut))).ToList()
                 : null;
-            return new ParticipantDto(x.Id, x.Nom, s.PalierActuel, s.BaisseDemandee, s.TotalPaye, s.EngagementTotal,
+            return new ParticipantDto(x.Id, x.Nom, s.PalierActuel, s.PalierDemande, s.TotalPaye, s.EngagementTotal,
                 s.ResteDuExigible, s.Avance, x.DateAdhesion, detail);
         }).ToList();
 
@@ -135,7 +164,7 @@ public sealed class ProjetService
         return new ProjetDetailsDto(p.Id.Value, p.Nom, p.Description, p.Objectif, p.Devise, p.Paliers, p.Periodicite.ToString(),
             p.DateDebut, p.NombreEcheances, p.Echeancier(), p.Statut.ToString(), gestion ? "gestionnaire" : "participant", moi?.Id,
             p.TotalCollecte, p.TotalDepense, p.Solde, Progression(p), gestion ? p.VerifierJournal() : null,
-            gestion ? p.CodeInvitationExpireLe : null, participants, paiements, depenses, journal);
+            gestion ? p.CodeInvitationExpireLe : null, ReglesProjetDto.From(p.Regles), participants, paiements, depenses, journal);
     }
 
     private static string StatutTexte(StatutOperation s) => s switch
@@ -160,7 +189,7 @@ public sealed class ProjetService
         if (!Enum.TryParse<TontinePeriodicity>(r.Periodicite, true, out var periodicite))
             throw new ArgumentException("Periodicity must be Weekly, Biweekly or Monthly.");
         var p = Projet.Creer(r.Nom, r.Description, r.Objectif, r.Paliers, periodicite, r.DateDebut, r.NombreEcheances,
-            UtilisateurId.From(userId));
+            UtilisateurId.From(userId), (r.Regles ?? new ReglesProjetDto()).ToDomain());
         await _projets.AddAsync(p, ct);
         return await Enregistrer(p, userId, false, ct);
     }
@@ -194,7 +223,7 @@ public sealed class ProjetService
         var p = await _projets.GetByCodeHashAsync(hash, ct);
         if (p is null || !p.CodeCorrespond(code)) throw new InvalidOperationException("Invalid or expired invitation code.");
         return new ProjetApercuDto(p.Nom, p.Description, p.Objectif, p.Paliers, p.Periodicite.ToString(), p.DateDebut,
-            p.NombreEcheances, p.Participants.Count);
+            p.NombreEcheances, p.Participants.Count, ReglesProjetDto.From(p.Regles));
     }
 
     public async Task<ProjetDetailsDto> RejoindreAsync(string code, string nom, decimal palier, Guid userId, CancellationToken ct)
@@ -205,7 +234,7 @@ public sealed class ProjetService
         return await Enregistrer(p, userId, false, ct);
     }
 
-    /// <summary>The participant changes their own tier (raise: applied; lower: pending approval).</summary>
+    /// <summary>The participant changes their own tier, according to the project's rules.</summary>
     public async Task<(bool Applique, ProjetDetailsDto Projet)> ChangerMonPalierAsync(Guid id, decimal palier, Guid userId, CancellationToken ct)
     {
         var p = await Charger(id, userId, false, Role.Participant, ct);
@@ -215,10 +244,17 @@ public sealed class ProjetService
         return (applique, await Enregistrer(p, userId, false, ct));
     }
 
-    public async Task<ProjetDetailsDto> DeciderBaisseAsync(Guid id, Guid participantId, bool approuver, Guid userId, bool admin, CancellationToken ct)
+    public async Task<ProjetDetailsDto> DeciderChangementPalierAsync(Guid id, Guid participantId, bool approuver, Guid userId, bool admin, CancellationToken ct)
     {
         var p = await Charger(id, userId, admin, Role.Gestionnaire, ct);
-        p.DeciderBaissePalier(participantId, approuver, userId.ToString(), Maintenant);
+        p.DeciderChangementPalier(participantId, approuver, userId.ToString(), Maintenant);
+        return await Enregistrer(p, userId, admin, ct);
+    }
+
+    public async Task<ProjetDetailsDto> ModifierReglesAsync(Guid id, ReglesProjetDto regles, Guid userId, bool admin, CancellationToken ct)
+    {
+        var p = await Charger(id, userId, admin, Role.Gestionnaire, ct);
+        p.ModifierRegles(regles.ToDomain(), userId.ToString());
         return await Enregistrer(p, userId, admin, ct);
     }
 

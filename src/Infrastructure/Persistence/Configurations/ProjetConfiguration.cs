@@ -34,6 +34,20 @@ internal sealed class ProjetConfiguration : IEntityTypeConfiguration<Projet>
         b.HasIndex(p => p.CodeInvitationHash);
         b.HasIndex(p => p.GestionnaireId);
 
+        // Complex type (value object): replacing the instance is tracked as a change of its columns.
+        b.ComplexProperty(p => p.Regles, r =>
+        {
+            r.Property(x => x.PaiementPartielAutorise).HasColumnName("regle_paiement_partiel").HasDefaultValue(true);
+            r.Property(x => x.TropPercu).HasColumnName("regle_trop_percu").HasMaxLength(20)
+                .HasConversion(v => v.ToString(), v => Enum.Parse<TraitementTropPercu>(v)).HasDefaultValue(TraitementTropPercu.Reporter);
+            r.Property(x => x.HausseRetroactive).HasColumnName("regle_hausse_retroactive").HasDefaultValue(true);
+            r.Property(x => x.HausseSoumiseAValidation).HasColumnName("regle_hausse_validation").HasDefaultValue(false);
+            r.Property(x => x.BaisseAutorisee).HasColumnName("regle_baisse_autorisee").HasDefaultValue(true);
+            r.Property(x => x.BaisseSoumiseAValidation).HasColumnName("regle_baisse_validation").HasDefaultValue(true);
+            r.Property(x => x.BaisseRetroactive).HasColumnName("regle_baisse_retroactive").HasDefaultValue(false);
+            r.Property(x => x.RattrapageAdhesionTardive).HasColumnName("regle_rattrapage_adhesion").HasDefaultValue(false);
+        });
+
         b.Property<List<decimal>>("_paliers").HasColumnName("paliers").HasColumnType("numeric(18,2)[]");
         b.Ignore(p => p.Paliers);
         b.Ignore(p => p.DomainEvents);
@@ -63,7 +77,7 @@ internal sealed class ParticipantConfiguration : IEntityTypeConfiguration<Partic
         b.Property(p => p.UtilisateurId).HasColumnName("utilisateur_id")
             .HasConversion(id => id != null ? id.Value : (Guid?)null, v => v.HasValue ? UtilisateurId.From(v.Value) : null);
         b.Property(p => p.DateAdhesion).HasColumnName("date_adhesion");
-        b.Ignore(p => p.BaisseEnAttente);
+        b.Ignore(p => p.ChangementEnAttente);
         b.HasMany(p => p.Changements).WithOne().HasForeignKey("participant_id").OnDelete(DeleteBehavior.Cascade);
         b.Navigation(p => p.Changements).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
@@ -82,6 +96,7 @@ internal sealed class ChangementPalierConfiguration : IEntityTypeConfiguration<C
             .HasConversion(v => v.ToString(), v => Enum.Parse<StatutChangementPalier>(v));
         b.Property(c => c.DemandeLe).HasColumnName("demande_le");
         b.Property(c => c.EffectifLe).HasColumnName("effectif_le");
+        b.Property(c => c.Retroactif).HasColumnName("retroactif").HasDefaultValue(false);
     }
 }
 

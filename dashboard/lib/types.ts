@@ -11,6 +11,8 @@ export interface TontineDto {
   membres: MembreDto[];
   tours: TourDto[];
   createdAt: string;
+  adhesionEnCours?: "Interdite" | "AvecValidation" | "Libre";
+  rattrapageAdhesionTardive?: boolean;
 }
 
 export interface MembreDto {
@@ -134,11 +136,22 @@ export interface EcheanceProjet {
   statut: "soldee" | "partielle" | "en_retard" | "a_venir";
 }
 
+export interface ReglesProjet {
+  paiementPartielAutorise: boolean;
+  tropPercu: "Reporter" | "Refuser";
+  hausseRetroactive: boolean;
+  hausseSoumiseAValidation: boolean;
+  baisseAutorisee: boolean;
+  baisseSoumiseAValidation: boolean;
+  baisseRetroactive: boolean;
+  rattrapageAdhesionTardive: boolean;
+}
+
 export interface ParticipantProjet {
   id: string;
   nom: string;
   palierActuel: number;
-  baisseDemandee: number | null;
+  palierDemande: number | null;
   totalPaye: number;
   engagementTotal: number;
   resteDuExigible: number;
@@ -191,6 +204,7 @@ export interface ProjetDetails {
   progression: number;
   journalValide: boolean | null;
   codeInvitationExpireLe: string | null;
+  regles: ReglesProjet;
   participants: ParticipantProjet[];
   paiements: PaiementProjet[];
   depenses: DepenseProjet[];

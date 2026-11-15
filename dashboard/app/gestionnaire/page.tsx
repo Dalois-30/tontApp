@@ -6,6 +6,7 @@ import StatCard from "@/components/StatCard";
 import StatusBadge from "@/components/StatusBadge";
 import RelancerButton from "@/components/RelancerButton";
 import AdhesionsEnAttente from "@/components/AdhesionsEnAttente";
+import ReglesAdhesionTontine from "@/components/ReglesAdhesionTontine";
 
 async function getTontine(token: string): Promise<TontineDto | null> {
   try {
@@ -182,6 +183,12 @@ export default async function DashboardGestionnairePage() {
           </ul>
         </div>
       )}
+
+      <ReglesAdhesionTontine
+        tontineId={tontine.id}
+        mode={tontine.adhesionEnCours ?? "AvecValidation"}
+        rattrapage={tontine.rattrapageAdhesionTardive ?? true}
+      />
 
       {/* ── Derniers paiements ─────────────────────────────────────── */}
       <div className="bg-white rounded-lg shadow border border-gray-200">
