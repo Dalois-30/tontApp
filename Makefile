@@ -31,10 +31,10 @@ reset: ## Efface la base de dev (volume Postgres) et relance l'infra
 	docker compose -f docker-compose.dev.yml down -v
 	./scripts/dev.sh up
 
-seed: ## Crée les comptes et la tontine de démo (API lancée)
-	./scripts/demo.sh seed
+seed: ## Crée les comptes et la tontine de démo (API lancée) ; CLASSEUR=fichier.xlsx importe aussi un projet
+	DEMO_CLASSEUR="$(CLASSEUR)" ./scripts/demo.sh seed
 
-otp: ## Affiche le code OTP d'un numéro : make otp TEL=+22670000010
+otp: ## Affiche le code OTP d'un numéro : make otp TEL=+237670000010
 	@./scripts/demo.sh otp $(TEL)
 
 dashboard: ## Lance le dashboard web sur http://localhost:3000

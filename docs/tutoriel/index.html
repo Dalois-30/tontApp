@@ -2,356 +2,571 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: a field guide. One column of reading width; each journey is a "scene" pairing the
-   recording with its numbered steps, phone recordings in a device frame, web ones full width. */
+/* Layout: a field guide in one reading column. Journeys are "scenes" (recording + numbered steps);
+   phone recordings sit in a device frame, web ones in a browser frame; a gallery shows every view. */
 :root {
-  --bg: #f6f7f3;          /* paper with a faint green bias */
-  --surface: #ffffff;
-  --ink: #17221a;
-  --muted: #5d6b60;
-  --line: #dde3da;
-  --green: #1b5e20;       /* the app's own brand green */
-  --green-soft: #e3efe2;
-  --ochre: #b8661c;       /* market-cloth ochre, used sparingly */
-  --ochre-soft: #f7e8d8;
-  --code-bg: #eef1ea;
-  --ok: #1f7a34; --warn: #a15c00; --bad: #b42318; --info: #3b5b8c;
+  --bg: #f6f7f3; --surface: #ffffff; --surface-2: #eef1ea; --ink: #17221a; --muted: #5d6b60; --line: #dde3da;
+  --green: #1b5e20; --green-soft: #e3efe2; --ochre: #b2621c; --ochre-soft: #f7e8d8; --code-bg: #eef1ea;
+  --ok: #1f7a34; --warn: #965f00; --bad: #b42318; --info: #2e5ba0;
   --display: "Bricolage Grotesque", "Space Grotesk", system-ui, sans-serif;
   --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #101612; --surface: #172019; --ink: #e7eee6; --muted: #9fb0a2; --line: #2a362d;
+    --bg: #101612; --surface: #172019; --surface-2: #1d2820; --ink: #e7eee6; --muted: #9fb0a2; --line: #2a362d;
     --green: #7fcf86; --green-soft: #1d2f20; --ochre: #e7a35e; --ochre-soft: #33261a; --code-bg: #1c261f;
     --ok: #6fd28a; --warn: #f0b45a; --bad: #ff8a7a; --info: #9cb8e6; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #101612; --surface: #172019; --ink: #e7eee6; --muted: #9fb0a2; --line: #2a362d;
+  --bg: #101612; --surface: #172019; --surface-2: #1d2820; --ink: #e7eee6; --muted: #9fb0a2; --line: #2a362d;
   --green: #7fcf86; --green-soft: #1d2f20; --ochre: #e7a35e; --ochre-soft: #33261a; --code-bg: #1c261f;
   --ok: #6fd28a; --warn: #f0b45a; --bad: #ff8a7a; --info: #9cb8e6; color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body {
-  background: var(--bg); color: var(--ink); font: 16px/1.6 var(--body);
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-}
-.wrap { max-width: 1040px; margin: 0 auto; padding-block: 40px 80px; display: grid; gap: 64px; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1080px; margin: 0 auto; padding-block: 40px 96px; display: grid; gap: 72px; }
 h1, h2, h3 { font-family: var(--display); line-height: 1.12; text-wrap: balance; margin: 0; }
 h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.02em; }
-h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; }
+h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); font-weight: 800; }
 h3 { font-size: 1.15rem; font-weight: 600; }
-p { margin: 0; max-width: 65ch; }
+p { margin: 0; max-width: 68ch; }
 a { color: var(--green); }
 .eyebrow { font: 600 0.78rem/1 var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ochre); }
 .muted { color: var(--muted); }
-code, kbd { font-family: var(--mono); font-size: 0.88em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
 :focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+.section { display: grid; gap: 20px; scroll-margin-top: 16px; }
 
-/* Hero */
-.hero { display: grid; gap: 20px; padding-top: 12px; }
-.hero p.lead { font-size: 1.15rem; color: var(--muted); }
-.principle {
-  display: flex; gap: 14px; align-items: flex-start; background: var(--green-soft);
-  border-radius: 10px; padding: 16px 18px; max-width: 760px;
-}
-.principle strong { font-family: var(--display); }
-.coin { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--green); color: var(--bg);
-  display: grid; place-items: center; font: 800 0.95rem var(--display); }
+.hero { display: grid; gap: 20px; padding-top: 8px; }
+.lead { font-size: 1.15rem; color: var(--muted); }
+.principle { display: flex; gap: 14px; align-items: flex-start; background: var(--green-soft); border-radius: 10px; padding: 16px 18px; max-width: 780px; }
+.coin { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--green); color: var(--bg); display: grid; place-items: center; font: 800 0.95rem var(--display); }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+.toc a { text-decoration: none; color: var(--ink); border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-size: 0.9rem; }
+.toc a:hover { border-color: var(--green); color: var(--green); }
 
-/* Roles */
-.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-.role { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 8px; align-content: start; }
-.role .where { font: 600 0.75rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 8px; align-content: start; }
+.where { font: 600 0.75rem/1 var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 
-/* Setup */
-.section { display: grid; gap: 20px; }
 .cmds { display: grid; gap: 10px; }
-.cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
-.cmd pre { margin: 0; font: 0.9rem/1.5 var(--mono); overflow-x: auto; white-space: pre; }
+.cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.cmd pre { margin: 0; font: 0.88rem/1.5 var(--mono); overflow-x: auto; white-space: pre; }
 .cmd .why { grid-column: 1 / -1; font-size: 0.88rem; color: var(--muted); }
-.copy { font: 600 0.78rem var(--body); border: 1px solid var(--line); background: var(--bg); color: var(--ink);
-  border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.copy { font: 600 0.78rem var(--body); border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
 .copy:hover { border-color: var(--green); color: var(--green); }
 .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-size: 0.93rem; }
-th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { font: 600 0.75rem var(--body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.74rem var(--body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
-td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.note { border-left: 3px solid var(--ochre); background: var(--ochre-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 760px; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.note { border-left: 3px solid var(--ochre); background: var(--ochre-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; max-width: 780px; }
 
-/* Journey timeline */
-.journey-head { display: grid; gap: 10px; }
-.scenes { display: grid; gap: 56px; counter-reset: scene; }
-.scene { display: grid; gap: 24px; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); align-items: start;
-  padding-top: 28px; border-top: 1px solid var(--line); }
+.chapter { display: grid; gap: 10px; padding-top: 12px; border-top: 2px solid var(--ink); }
+.scenes { display: grid; gap: 52px; }
+.scene { display: grid; gap: 24px; grid-template-columns: minmax(0, 290px) minmax(0, 1fr); align-items: start; padding-top: 26px; border-top: 1px solid var(--line); }
 .scene.wide { grid-template-columns: minmax(0, 1fr); }
-.scene-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.step-no { font: 800 0.95rem var(--display); color: var(--bg); background: var(--green); border-radius: 6px; padding: 2px 9px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.no { font: 800 0.95rem var(--display); color: var(--bg); background: var(--green); border-radius: 6px; padding: 2px 9px; }
 .chip { font: 600 0.75rem var(--body); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .chip.phone { color: var(--green); border-color: var(--green); }
 .chip.web { color: var(--ochre); border-color: var(--ochre); }
-.device { background: #0d120e; border-radius: 30px; padding: 10px; max-width: 300px; width: 100%;
-  box-shadow: 0 18px 40px -22px rgba(0,0,0,.55); }
+.device { background: #0d120e; border-radius: 30px; padding: 10px; max-width: 290px; width: 100%; box-shadow: 0 18px 40px -22px rgba(0,0,0,.55); }
 .device video { display: block; width: 100%; aspect-ratio: 9 / 20; border-radius: 22px; background: #000; }
-.browser { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); max-width: 100%; }
+.browser { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
 .browser .bar { display: flex; gap: 6px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); }
 .browser .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: block; }
 .browser .bar span { margin-left: 8px; font: 0.8rem var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser video { display: block; width: 100%; aspect-ratio: 1280 / 760; background: #000; }
-.scene-text { display: grid; gap: 14px; min-width: 0; }
-ol.steps { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 65ch; }
+.text { display: grid; gap: 14px; min-width: 0; }
+ol.steps { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 68ch; }
 ol.steps li::marker { font-family: var(--display); font-weight: 600; color: var(--green); }
-.keep { font-size: 0.93rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; max-width: 65ch; }
+.keep { font-size: 0.93rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; max-width: 68ch; }
 .keep b { color: var(--green); }
-.wide .scene-text { order: -1; }
+.wide .text { order: -1; }
 
-/* Statuses */
-.statuses { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
-.st { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; align-items: baseline;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; }
-.pill { font: 600 0.72rem var(--mono); padding: 2px 8px; border-radius: 999px; }
-.p-ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.gallery { display: grid; gap: 14px; }
+.gallery.web { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.gallery.mob { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.shot { margin: 0; display: grid; gap: 6px; }
+.shot button { padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); cursor: zoom-in; display: block; width: 100%; }
+.shot img { display: block; width: 100%; height: auto; }
+.shot figcaption { font-size: 0.85rem; color: var(--muted); }
+.shot figcaption b { color: var(--ink); font-weight: 600; }
+dialog { border: 0; padding: 0; background: transparent; max-width: min(96vw, 1360px); max-height: 94vh; }
+dialog::backdrop { background: rgba(10, 14, 11, .82); }
+dialog img { display: block; max-width: 100%; max-height: 88vh; border-radius: 10px; }
+dialog p { color: #fff; margin-top: 8px; font-size: .95rem; }
+dialog button { position: absolute; top: 8px; right: 8px; font: 600 .85rem var(--body); border: 0; border-radius: 6px; padding: 6px 10px; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; }
+
+.rules td:first-child { font-weight: 500; }
+.def { font: 600 0.78rem var(--body); color: var(--green); background: var(--green-soft); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.statuses { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.st { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; align-items: baseline; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; }
+.pill { font: 600 0.74rem var(--body); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.p-ok { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
 .p-warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
-.p-bad { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
-.p-info { background: color-mix(in srgb, var(--info) 16%, transparent); color: var(--info); }
+.p-bad { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.p-info { background: color-mix(in srgb, var(--info) 15%, transparent); color: var(--info); }
 .p-mute { background: var(--code-bg); color: var(--muted); }
-
 .faq { display: grid; gap: 10px; }
 details { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
 summary { cursor: pointer; font-weight: 600; }
 details p, details ul { margin-top: 8px; color: var(--muted); }
 footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--line); padding-top: 18px; }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .scene { grid-template-columns: minmax(0, 1fr); }
-  .device { margin: 0 auto; max-width: 260px; }
-  .scene-text { order: -1; }
+  .device { margin: 0 auto; max-width: 250px; }
+  .text { order: -1; }
 }
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
 
 <div class="wrap">
 
   <header class="hero">
-    <span class="eyebrow">Guide de prise en main · version de démonstration</span>
+    <span class="eyebrow">Guide de prise en main · Cameroun (+237, FCFA)</span>
     <h1>Prise en main TontApp</h1>
-    <p class="lead">Gérer une tontine de bout en bout : invitations, tours, encaissement des cotisations en espèces et journal d'audit. Chaque parcours a été filmé en conditions réelles, sur un téléphone Android et dans le navigateur.</p>
+    <p class="lead">Tontines et projets collectifs, de l'invitation au journal d'audit. Chaque parcours a été filmé en conditions réelles, sur un téléphone Android et dans le navigateur. Le projet collectif est celui de votre classeur Excel de cotisations, importé tel quel.</p>
     <div class="principle">
       <span class="coin" aria-hidden="true">F</span>
-      <p><strong>L'argent reste hors de l'application.</strong> Les membres remettent leur cotisation au gestionnaire (espèces ou banque). TontApp tient le registre : le gestionnaire saisit le paiement, le valide après avoir vérifié la preuve, et chaque action est inscrite dans un journal infalsifiable.</p>
+      <p><strong>L'argent reste hors de l'application.</strong> Les membres remettent leur cotisation au gestionnaire, en espèces ou à la banque. TontApp tient le registre : le gestionnaire saisit le paiement, le valide après avoir vérifié le reçu, et chaque action est inscrite dans un journal impossible à modifier sans que cela se voie.</p>
     </div>
+    <nav class="toc" aria-label="Sommaire">
+      <a href="#roles">Qui fait quoi</a><a href="#demarrer">Démarrer</a><a href="#tontine">Parcours tontine</a>
+      <a href="#projet">Parcours projet</a><a href="#admin">Administration</a><a href="#vues">Toutes les vues</a>
+      <a href="#regles">Règles configurables</a><a href="#import">Import Excel</a><a href="#statuts">Statuts</a><a href="#faq">Questions</a>
+    </nav>
   </header>
 
-  <section class="section" aria-labelledby="roles-h">
+  <section class="section" id="roles" aria-labelledby="roles-h">
     <h2 id="roles-h">Qui fait quoi</h2>
-    <div class="roles">
-      <div class="role">
-        <span class="where">Mobile + web</span>
-        <h3>Gestionnaire</h3>
-        <p class="muted">Crée la tontine, invite les membres par code, l'active, gère les tours, relance les retardataires. Sur le web, il encaisse et valide les cotisations.</p>
-      </div>
-      <div class="role">
-        <span class="where">Mobile</span>
-        <h3>Membre</h3>
-        <p class="muted">S'inscrit avec son numéro (code OTP), rejoint une tontine avec un code d'invitation, suit le tour en cours et l'historique de ses versements.</p>
-      </div>
-      <div class="role">
-        <span class="where">Web</span>
-        <h3>Administrateur</h3>
-        <p class="muted">Supervise la plateforme : métriques de la semaine, liste de toutes les tontines, alertes (chaîne d'audit rompue, tours en retard, SMS en échec).</p>
-      </div>
+    <div class="grid3">
+      <div class="box"><span class="where">Mobile + web</span><h3>Gestionnaire</h3>
+        <p class="muted">Crée la tontine, invite par code, l'active, gère les tours et relance par SMS. Sur le web, il encaisse et valide les cotisations, accepte les adhésions tardives, gère les projets collectifs et règle leurs paramètres.</p></div>
+      <div class="box"><span class="where">Mobile</span><h3>Membre / participant</h3>
+        <p class="muted">S'inscrit avec son numéro et un code OTP, rejoint une tontine ou un projet avec un code, choisit son palier, suit ses échéances et voit ses paiements passer à « validé ».</p></div>
+      <div class="box"><span class="where">Web</span><h3>Administrateur</h3>
+        <p class="muted">Supervise la plateforme : cotisations validées de la semaine, SMS, liste des tontines, alertes (chaîne d'audit rompue, tour en retard, SMS en échec).</p></div>
     </div>
   </section>
 
-  <section class="section" aria-labelledby="setup-h">
-    <h2 id="setup-h">Démarrer en local</h2>
-    <p class="muted">Prérequis : Docker, le SDK .NET 10 (installé dans <code>~/.dotnet</code>), Node 20+, et pour le mobile le SDK Android avec un téléphone branché en USB (débogage USB activé). Toutes les commandes se lancent à la racine du dépôt.</p>
+  <section class="section" id="demarrer" aria-labelledby="demarrer-h">
+    <h2 id="demarrer-h">Démarrer en local</h2>
+    <p class="muted">Prérequis : Docker, le SDK .NET 10, Node 20 et plus, et pour le mobile le SDK Android avec un téléphone branché en USB (débogage USB activé). Toutes les commandes se lancent à la racine du dépôt.</p>
     <div class="cmds">
       <div class="cmd"><pre>make up</pre><button class="copy" type="button" data-copy="make up">Copier</button><span class="why">Démarre PostgreSQL (port 5433) et Redis (port 6380).</span></div>
       <div class="cmd"><pre>make api</pre><button class="copy" type="button" data-copy="make api">Copier</button><span class="why">Lance l'API sur http://localhost:5243 et applique les migrations. Laisser ce terminal ouvert.</span></div>
-      <div class="cmd"><pre>make seed</pre><button class="copy" type="button" data-copy="make seed">Copier</button><span class="why">Crée les comptes de démonstration et la « Tontine du Marche » (3 membres, en brouillon).</span></div>
-      <div class="cmd"><pre>make dashboard</pre><button class="copy" type="button" data-copy="make dashboard">Copier</button><span class="why">Lance le tableau de bord web sur http://localhost:3000.</span></div>
-      <div class="cmd"><pre>make mobile</pre><button class="copy" type="button" data-copy="make mobile">Copier</button><span class="why">Redirige les ports du téléphone (adb reverse) et lance Metro pour l'application Android.</span></div>
-      <div class="cmd"><pre>make otp TEL=+22670000010</pre><button class="copy" type="button" data-copy="make otp TEL=+22670000010">Copier</button><span class="why">En développement, les SMS sont simulés : cette commande affiche le code OTP envoyé à un numéro.</span></div>
-      <div class="cmd"><pre>make reset</pre><button class="copy" type="button" data-copy="make reset">Copier</button><span class="why">Efface toutes les données de développement pour repartir de zéro (arrêter l'API avant).</span></div>
+      <div class="cmd"><pre>make seed CLASSEUR=chemin/vers/GESTION_COTISATIONS.xlsx</pre><button class="copy" type="button" data-copy="make seed CLASSEUR=chemin/vers/GESTION_COTISATIONS.xlsx">Copier</button><span class="why">Crée les comptes et la « Tontine du Marche » ; avec CLASSEUR, importe aussi le projet collectif du classeur Excel. Sans CLASSEUR, seule la tontine est créée.</span></div>
+      <div class="cmd"><pre>make dashboard</pre><button class="copy" type="button" data-copy="make dashboard">Copier</button><span class="why">Lance le tableau de bord sur http://localhost:3000.</span></div>
+      <div class="cmd"><pre>make mobile</pre><button class="copy" type="button" data-copy="make mobile">Copier</button><span class="why">Redirige les ports du téléphone (adb reverse) et lance l'application Android.</span></div>
+      <div class="cmd"><pre>make otp TEL=+237670000010</pre><button class="copy" type="button" data-copy="make otp TEL=+237670000010">Copier</button><span class="why">En développement les SMS sont simulés : affiche le code OTP envoyé à un numéro (valable 5 minutes).</span></div>
+      <div class="cmd"><pre>make reset</pre><button class="copy" type="button" data-copy="make reset">Copier</button><span class="why">Efface toutes les données de développement (arrêter l'API avant).</span></div>
     </div>
-
     <h3>Comptes de démonstration</h3>
     <div class="table-scroll">
       <table>
         <thead><tr><th>Rôle</th><th>Nom</th><th>Téléphone</th><th>Mot de passe</th></tr></thead>
         <tbody>
-          <tr><td>Administrateur</td><td>Admin TontApp</td><td class="num">+22670000001</td><td class="num">Demo2026!</td></tr>
-          <tr><td>Gestionnaire</td><td>Awa Traore</td><td class="num">+22670000002</td><td class="num">Demo2026!</td></tr>
-          <tr><td>Membre (bénéficiaire du tour 1)</td><td>Ibrahim Sawadogo</td><td class="num">+22670000003</td><td class="num">Demo2026!</td></tr>
-          <tr><td>Membre</td><td>Mariam Kabore</td><td class="num">+22670000004</td><td class="num">Demo2026!</td></tr>
-          <tr><td>Membre</td><td>Seydou Ouedraogo</td><td class="num">+22670000005</td><td class="num">Demo2026!</td></tr>
-          <tr><td>Membre créée dans le tutoriel</td><td>Fatou Diallo</td><td class="num">+22670000010</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Administrateur</td><td>Admin TontApp</td><td class="num">+237 670 000 001</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Gestionnaire</td><td>Awa Traore</td><td class="num">+237 670 000 002</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Membre, bénéficiaire du tour 1</td><td>Ibrahim Sawadogo</td><td class="num">+237 670 000 003</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Membre</td><td>Mariam Kabore</td><td class="num">+237 670 000 004</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Membre</td><td>Seydou Ouedraogo</td><td class="num">+237 670 000 005</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Membre arrivé en cours de cycle</td><td>Ousmane Zongo</td><td class="num">+237 670 000 011</td><td class="num">Demo2026!</td></tr>
+          <tr><td>Membre créée pendant le tutoriel</td><td>Fatou Diallo</td><td class="num">+237 670 000 010</td><td class="num">Demo2026!</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="note">Dans l'application, le champ téléphone est pré-rempli avec <code>+226</code> : il suffit de taper les 8 chiffres restants. Les numéros sont fictifs ; en développement, aucun SMS réel n'est envoyé.</p>
+    <p class="note">Le champ téléphone est pré-rempli avec <code>+237</code> : tapez les 9 chiffres (6XX XX XX XX). La devise par défaut est le franc CFA d'Afrique centrale (XAF), affiché « FCFA ».</p>
   </section>
 
-  <section class="section" aria-labelledby="journey-h">
-    <div class="journey-head">
-      <span class="eyebrow">Un cycle complet, dans l'ordre</span>
-      <h2 id="journey-h">Le parcours en six scènes</h2>
-      <p class="muted">Les scènes s'enchaînent : chacune part de l'état laissé par la précédente. Les points blancs sur les vidéos du téléphone montrent chaque toucher ; sur le web, le cercle rouge suit la souris.</p>
+  <!-- ─────────────── Tontine ─────────────── -->
+  <section class="section" id="tontine" aria-labelledby="tontine-h">
+    <div class="chapter">
+      <span class="eyebrow">Chapitre 1 · un cycle de tontine</span>
+      <h2 id="tontine-h">De l'invitation au paiement validé</h2>
+      <p class="muted">Les scènes s'enchaînent : chacune part de l'état laissé par la précédente. Sur le téléphone, les points blancs montrent chaque toucher ; dans le navigateur, le cercle rouge suit la souris et un bandeau légende chaque étape.</p>
     </div>
-
     <div class="scenes">
 
-      <article class="scene" id="scene-1">
-        <div class="device"><video src="videos/m1.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : la gestionnaire se connecte et génère un code d'invitation"></video></div>
-        <div class="scene-text">
-          <div class="scene-meta"><span class="step-no">1</span><span class="chip phone">Téléphone</span><span class="chip">Gestionnaire · 1 min 45</span></div>
+      <article class="scene" id="s1">
+        <div class="device"><video src="videos/m1.mp4" poster="apercus/m1.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : la gestionnaire se connecte et génère un code d'invitation"></video></div>
+        <div class="text">
+          <div class="meta"><span class="no">1</span><span class="chip phone">Téléphone</span><span class="chip">Gestionnaire · 2 min 20</span></div>
           <h3>Se connecter et inviter des membres</h3>
           <ol class="steps">
             <li>Parcourir les trois écrans de présentation, puis <b>Commencer</b>.</li>
-            <li>Se connecter avec le compte d'Awa (<code>70000002</code>, <code>Demo2026!</code>).</li>
-            <li>Ouvrir <b>Tontine du Marche</b> : statut <i>Draft</i>, 3 membres, cotisation de 10 000 FCFA par mois.</li>
-            <li><b>Inviter des membres</b>, puis <b>Générer un code d'invitation</b>. Le code à 6 caractères est valable 7 jours et peut être partagé via WhatsApp.</li>
-            <li>Se déconnecter depuis <b>Profil</b>.</li>
+            <li>Se connecter avec le compte d'Awa : <code>670000002</code> après le +237, mot de passe <code>Demo2026!</code>. L'accueil salue Awa et liste sa tontine et le projet collectif qu'elle gère.</li>
+            <li>Ouvrir <b>Tontine du Marche</b> : brouillon, 3 membres, 10 000 FCFA par mois.</li>
+            <li><b>Inviter des membres</b> puis <b>Générer un code d'invitation</b> : un code de 6 caractères, partageable sur WhatsApp.</li>
+            <li>Ouvrir le <b>Profil</b> et se déconnecter.</li>
           </ol>
-          <p class="keep"><b>À retenir :</b> un code fonctionne aussi après l'activation. Le nouveau membre attend alors la validation du gestionnaire, passe en dernier dans l'ordre des bénéficiaires et rattrape les cotisations des tours déjà ouverts (fonction ajoutée après le tournage).</p>
+          <p class="keep"><b>À retenir :</b> un code fonctionne aussi après l'activation ; dans ce cas l'adhésion suit les règles de la tontine (voir la scène 4).</p>
         </div>
       </article>
 
-      <article class="scene" id="scene-2">
-        <div class="device"><video src="videos/m2.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : un nouveau membre s'inscrit, valide son code OTP et rejoint la tontine"></video></div>
-        <div class="scene-text">
-          <div class="scene-meta"><span class="step-no">2</span><span class="chip phone">Téléphone</span><span class="chip">Nouveau membre · 2 min 10</span></div>
+      <article class="scene" id="s2">
+        <div class="device"><video src="videos/m2.mp4" poster="apercus/m2.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : un nouveau membre s'inscrit, saisit le code OTP et rejoint la tontine"></video></div>
+        <div class="text">
+          <div class="meta"><span class="no">2</span><span class="chip phone">Téléphone</span><span class="chip">Nouveau membre · 2 min 57</span></div>
           <h3>S'inscrire et rejoindre la tontine</h3>
           <ol class="steps">
             <li><b>Créer un compte</b> : nom, numéro, mot de passe (8 caractères minimum, une majuscule, un chiffre).</li>
-            <li>Saisir le code OTP à 6 chiffres reçu par SMS (en développement : <code>make otp TEL=…</code>), puis <b>Vérifier</b>.</li>
-            <li>Sur l'accueil vide, toucher l'icône <b>Rejoindre une tontine</b> (poignée de main).</li>
-            <li>Entrer le code d'invitation de la scène 1 ; le nom affiché dans le groupe est pré-rempli.</li>
-            <li>Fatou apparaît dans la tontine, qui compte maintenant 4 membres.</li>
+            <li>Saisir le code OTP à 6 chiffres reçu par SMS, puis <b>Vérifier</b>.</li>
+            <li>Sur l'accueil, toucher la poignée de main <b>Rejoindre une tontine</b> et entrer le code de la scène 1.</li>
+            <li>La tontine apparaît dans l'accueil de Fatou ; elle compte maintenant 4 membres.</li>
           </ol>
-          <p class="keep"><b>À retenir :</b> le compte est rattaché au numéro de téléphone. Un même numéro ne peut rejoindre une tontine qu'une seule fois.</p>
         </div>
       </article>
 
-      <article class="scene" id="scene-3">
-        <div class="device"><video src="videos/m3.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : la gestionnaire active la tontine, ouvre la gestion du tour et relance les retardataires par SMS"></video></div>
-        <div class="scene-text">
-          <div class="scene-meta"><span class="step-no">3</span><span class="chip phone">Téléphone</span><span class="chip">Gestionnaire · 1 min 46</span></div>
+      <article class="scene" id="s3">
+        <div class="device"><video src="videos/m3.mp4" poster="apercus/m3.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : la gestionnaire active la tontine, gère le tour et relance par SMS"></video></div>
+        <div class="text">
+          <div class="meta"><span class="no">3</span><span class="chip phone">Téléphone</span><span class="chip">Gestionnaire · 2 min 35</span></div>
           <h3>Activer la tontine et gérer le tour</h3>
           <ol class="steps">
-            <li>Se reconnecter en tant qu'Awa et ouvrir la tontine.</li>
-            <li><b>Activer la tontine</b> puis confirmer. Il faut au moins 3 membres. Les inscriptions sont fermées et le <b>tour n°1</b> s'ouvre avec Ibrahim comme bénéficiaire (ordre d'inscription).</li>
-            <li>Le détail affiche la progression des paiements et le compte à rebours jusqu'à la fin du tour (30 jours pour une tontine mensuelle).</li>
-            <li><b>Gérer le tour</b> : la liste des retardataires exclut le bénéficiaire, qui reçoit et ne cotise pas.</li>
-            <li><b>Tout sélectionner</b> puis <b>Relancer par SMS</b> : un rappel est planifié pour chaque membre.</li>
+            <li><b>Activer la tontine</b> (3 membres minimum) : le <b>tour 1</b> s'ouvre, Ibrahim est le bénéficiaire, un compte à rebours affiche la fin du tour.</li>
+            <li><b>Gérer le tour</b> : les retardataires sont listés, le bénéficiaire en est exclu puisqu'il reçoit.</li>
+            <li><b>Tout sélectionner</b> puis <b>Relancer par SMS</b>.</li>
           </ol>
-          <p class="keep"><b>À retenir :</b> un membre qui a désactivé les SMS de rappel dans son profil ne reçoit pas de relance. Les confirmations de paiement, elles, lui sont toujours envoyées.</p>
+          <p class="keep"><b>À retenir :</b> un membre qui a désactivé les SMS de rappel dans son profil n'est pas relancé ; les confirmations de paiement lui restent envoyées.</p>
         </div>
       </article>
 
-      <article class="scene wide" id="scene-4">
-        <div class="scene-text">
-          <div class="scene-meta"><span class="step-no">4</span><span class="chip web">Navigateur</span><span class="chip">Gestionnaire · 1 min 04</span></div>
-          <h3>Encaisser, valider et vérifier l'audit</h3>
+      <article class="scene" id="s4">
+        <div class="device"><video src="videos/m5.mp4" poster="apercus/m5.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : un membre demande à rejoindre la tontine déjà démarrée"></video></div>
+        <div class="text">
+          <div class="meta"><span class="no">4</span><span class="chip phone">Téléphone</span><span class="chip">Membre arrivé tard · 1 min 56</span></div>
+          <h3>Rejoindre une tontine déjà démarrée</h3>
           <ol class="steps">
-            <li>Se connecter sur <code>http://localhost:3000</code> avec le compte d'Awa. Le tableau de bord montre le tour en cours et les membres.</li>
-            <li><b>Paiements</b> : choisir le membre, vérifier le montant, saisir la référence du reçu, puis <b>Enregistrer</b>. Le paiement est créé <i>en attente</i>.</li>
-            <li>Après vérification de la preuve, <b>Valider</b> : il passe à <i>confirme</i> avec une référence <code>CASH-…</code>.</li>
-            <li>Si la preuve ne convient pas, <b>Rejeter</b> avec un motif (obligatoire). Le membre redevient « à payer ».</li>
-            <li><b>Audit Trail</b> : chaque action (création, saisie, validation, rejet) avec son auteur. Le bandeau vert confirme que la chaîne SHA-256 est intacte.</li>
+            <li>Ousmane se connecte et entre un code alors que le tour 1 est en cours.</li>
+            <li>L'application répond <b>Demande envoyée</b> : avec les règles par défaut, son adhésion attend la validation du gestionnaire.</li>
+            <li>Une fois accepté, il passera en dernier dans l'ordre des bénéficiaires et rattrapera les tours déjà ouverts.</li>
           </ol>
         </div>
-        <div class="browser"><div class="bar"><i></i><i></i><i></i><span>localhost:3000/gestionnaire/paiements</span></div>
-          <video src="videos/web-gestionnaire.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : encaissement en espèces, validation, rejet et journal d'audit sur le tableau de bord"></video></div>
       </article>
 
-      <article class="scene" id="scene-5">
-        <div class="device"><video src="videos/m4.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : le membre voit son paiement confirmé dans l'application"></video></div>
-        <div class="scene-text">
-          <div class="scene-meta"><span class="step-no">5</span><span class="chip phone">Téléphone</span><span class="chip">Membre · 56 s</span></div>
-          <h3>Le membre voit son paiement confirmé</h3>
+      <article class="scene wide" id="s5">
+        <div class="text">
+          <div class="meta"><span class="no">5</span><span class="chip web">Navigateur</span><span class="chip">Gestionnaire · 1 min 23</span></div>
+          <h3>Accepter l'adhésion, encaisser, valider, vérifier l'audit</h3>
           <ol class="steps">
-            <li>Fatou se connecte : le tour n°1 indique 1 paiement sur 3 et son badge est passé à <i>Payé</i>.</li>
-            <li><b>Payer ma cotisation</b> rappelle la marche à suivre : remettre le montant au gestionnaire, qui l'enregistre puis le valide.</li>
-            <li><b>Voir mon historique</b> : le versement de 10 000 FCFA, sa référence et la date de confirmation.</li>
+            <li>Le <b>tableau de bord</b> de la tontine : tour en cours, collecte du tour, membres à jour, reste dû des tours passés.</li>
+            <li>La carte <b>Demandes d'adhésion</b> : <b>Accepter</b> Ousmane, qui prend le rang 5.</li>
+            <li>Les <b>règles d'adhésion</b> se règlent sur la même page (interdite, avec validation, libre ; rattrapage ou non).</li>
+            <li><b>Paiements</b> : choisir le membre, le tour (les tours passés impayés sont proposés en rattrapage), le montant et le n° de reçu, puis <b>Enregistrer</b>. Le paiement est « en attente ».</li>
+            <li><b>Valider</b> après vérification du reçu, ou <b>Rejeter</b> avec un motif obligatoire.</li>
+            <li><b>Journal d'audit</b> : chaque action et son auteur, et la vérification de la chaîne SHA-256.</li>
           </ol>
-          <p class="keep"><b>À retenir :</b> le membre ne déclare rien lui-même. Seul ce que le gestionnaire a validé apparaît comme confirmé.</p>
+        </div>
+        <div class="browser"><div class="bar"><i></i><i></i><i></i><span>localhost:3000/gestionnaire</span></div>
+          <video src="videos/web-tontine.mp4" poster="apercus/web-tontine.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : adhésion acceptée, encaissement, validation, rejet et audit"></video></div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ─────────────── Projet ─────────────── -->
+  <section class="section" id="projet" aria-labelledby="projet-h">
+    <div class="chapter">
+      <span class="eyebrow">Chapitre 2 · un projet collectif par paliers</span>
+      <h2 id="projet-h">« Projet Jeunesse Lumière Santé et Vie »</h2>
+      <p class="muted">Le projet est importé de votre classeur Excel : 20 membres, paliers de 15 000, 30 000 et 75 000 FCFA par mois, 44 échéances de mai 2024 à décembre 2027, 302 paiements. Deux membres équipés de l'application le rejoignent ensuite avec un code.</p>
+    </div>
+    <div class="scenes">
+
+      <article class="scene wide" id="s6">
+        <div class="text">
+          <div class="meta"><span class="no">6</span><span class="chip web">Navigateur</span><span class="chip">Gestionnaire · 1 min 18</span></div>
+          <h3>Créer un projet, puis lire le projet importé</h3>
+          <ol class="steps">
+            <li><b>Projets collectifs</b> puis <b>Nouveau projet</b> : nom, objectif, paliers, périodicité, première échéance, nombre d'échéances. L'engagement maximal est calculé.</li>
+            <li>Les <b>règles du projet</b> se choisissent dès la création (voir <a href="#regles">Règles configurables</a>).</li>
+            <li>Le projet importé : collecté sur l'objectif, solde, journal intègre, et le graphique <b>collecté / attendu</b> échéance par échéance. Survoler le graphique donne les chiffres de chaque échéance.</li>
+            <li>Les <b>participants triés par reste dû</b> : une case par échéance (soldée, partielle, en retard, à venir). Cliquer une ligne affiche le détail.</li>
+            <li><b>Code d'invitation</b> : utilisable plusieurs fois pendant 30 jours.</li>
+          </ol>
+        </div>
+        <div class="browser"><div class="bar"><i></i><i></i><i></i><span>localhost:3000/gestionnaire/projets</span></div>
+          <video src="videos/web-projets.mp4" poster="apercus/web-projets.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : création d'un projet et lecture du projet importé"></video></div>
+      </article>
+
+      <article class="scene" id="s7">
+        <div class="device"><video src="videos/m6.mp4" poster="apercus/m6.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : un membre rejoint le projet avec un palier puis l'augmente"></video></div>
+        <div class="text">
+          <div class="meta"><span class="no">7</span><span class="chip phone">Téléphone</span><span class="chip">Participant · 2 min 49</span></div>
+          <h3>Rejoindre le projet et augmenter son palier</h3>
+          <ol class="steps">
+            <li>Dans l'accueil, section <b>Mes projets collectifs</b>, toucher <b>Rejoindre</b>.</li>
+            <li>Saisir le code puis <b>Voir le projet</b> : objectif, échéancier, nombre de participants.</li>
+            <li>Choisir son <b>palier</b> (30 000 FCFA) et <b>Rejoindre</b>.</li>
+            <li>Dans <b>Mon engagement</b>, toucher 75 000 : la fenêtre explique la règle (hausse immédiate, anciennes échéances complétées).</li>
+          </ol>
         </div>
       </article>
 
-      <article class="scene wide" id="scene-6">
-        <div class="scene-text">
-          <div class="scene-meta"><span class="step-no">6</span><span class="chip web">Navigateur</span><span class="chip">Administrateur · 31 s</span></div>
+      <article class="scene" id="s8">
+        <div class="device"><video src="videos/m7.mp4" poster="apercus/m7.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : un participant demande une baisse de palier"></video></div>
+        <div class="text">
+          <div class="meta"><span class="no">8</span><span class="chip phone">Téléphone</span><span class="chip">Participant · 2 min 49</span></div>
+          <h3>Demander une baisse de palier</h3>
+          <ol class="steps">
+            <li>Seydou rejoint le projet à 30 000 FCFA.</li>
+            <li>Il touche 15 000 : la baisse est soumise à la validation du gestionnaire (règle par défaut).</li>
+            <li><b>Demande envoyée</b> ; l'engagement affiche « passage à 15 000 FCFA en attente de validation ». Son palier actuel reste dû en attendant.</li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="scene wide" id="s9">
+        <div class="text">
+          <div class="meta"><span class="no">9</span><span class="chip web">Navigateur</span><span class="chip">Gestionnaire · 1 min 56</span></div>
+          <h3>Gérer le projet : approbation, rattrapage, avance, dépense</h3>
+          <ol class="steps">
+            <li><b>Changements de palier à valider</b> : approuver la baisse de Seydou.</li>
+            <li>Encaisser un <b>rattrapage</b> : BOUDJEKA Filomene verse 60 000 FCFA sur son retard ; enregistrer puis valider.</li>
+            <li>Encaisser Fatou : son versement couvre ses premières échéances, il apparaît en <b>avance</b>.</li>
+            <li><b>Dépenses</b> : proposer « Achat de médicaments » (450 000 FCFA, facture) puis la valider. Une dépense ne peut pas dépasser le solde.</li>
+            <li>Les <b>règles</b> restent modifiables ; le <b>journal du projet</b> trace tout.</li>
+          </ol>
+        </div>
+        <div class="browser"><div class="bar"><i></i><i></i><i></i><span>localhost:3000/gestionnaire/projets/…</span></div>
+          <video src="videos/web-projetGestion.mp4" poster="apercus/web-projetGestion.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : approbation, encaissements, dépense et journal du projet"></video></div>
+      </article>
+
+      <article class="scene" id="s10">
+        <div class="device"><video src="videos/m4.mp4" poster="apercus/m4.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : le membre voit ses paiements validés et son engagement"></video></div>
+        <div class="text">
+          <div class="meta"><span class="no">10</span><span class="chip phone">Téléphone</span><span class="chip">Membre · 1 min 55</span></div>
+          <h3>Le membre retrouve tout, validé</h3>
+          <ol class="steps">
+            <li>Dans la tontine, Fatou est passée à <b>Payé</b> pour le tour 1.</li>
+            <li><b>Payer ma cotisation</b> rappelle la marche à suivre ; <b>Voir mon historique</b> affiche le versement validé et sa référence.</li>
+            <li>Dans le projet : palier 75 000 FCFA, déjà payé, reste dû, <b>avance</b>, et l'échéancier avec la première échéance soldée. La dépense validée est visible par tous.</li>
+          </ol>
+          <p class="keep"><b>À retenir :</b> le membre ne déclare rien lui-même. Seul ce que le gestionnaire a validé apparaît comme payé.</p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ─────────────── Admin ─────────────── -->
+  <section class="section" id="admin" aria-labelledby="admin-h">
+    <div class="chapter">
+      <span class="eyebrow">Chapitre 3 · la plateforme</span>
+      <h2 id="admin-h">Page publique et administration</h2>
+    </div>
+    <div class="scenes">
+      <article class="scene wide" id="s11">
+        <div class="text">
+          <div class="meta"><span class="no">11</span><span class="chip web">Navigateur</span><span class="chip">Visiteur · 19 s</span></div>
+          <h3>La page d'accueil</h3>
+          <p class="muted">Le positionnement (l'argent reste hors de l'application), les quatre fonctions et les offres : Gratuit (1 tontine, 10 membres), Pro (2 000 FCFA par mois, 10 tontines), IMF sur devis.</p>
+        </div>
+        <div class="browser"><div class="bar"><i></i><i></i><i></i><span>localhost:3000</span></div>
+          <video src="videos/web-accueil.mp4" poster="apercus/web-accueil.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : la page d'accueil publique"></video></div>
+      </article>
+      <article class="scene wide" id="s12">
+        <div class="text">
+          <div class="meta"><span class="no">12</span><span class="chip web">Navigateur</span><span class="chip">Administrateur · 28 s</span></div>
           <h3>Superviser la plateforme</h3>
           <ol class="steps">
-            <li>Se connecter avec le compte administrateur, puis ouvrir <b>Vue d'ensemble</b> : tontines actives, membres inscrits, volume confirmé de la semaine et SMS envoyés.</li>
-            <li><b>Tontines</b> : toutes les tontines de la plateforme avec statut, membres, cotisation et périodicité.</li>
-            <li><b>Alertes</b> : chaîne d'audit rompue (critique), tour dont l'échéance est dépassée, SMS en échec.</li>
+            <li><b>Vue d'ensemble</b> : tontines actives, membres, cotisations validées sur 7 jours, SMS envoyés et en échec.</li>
+            <li><b>Tontines</b> : toutes les tontines, avec une recherche par nom.</li>
+            <li><b>Alertes</b> : chaîne d'audit rompue (critique), tour dont l'échéance est dépassée, SMS en échec ; filtre par gravité.</li>
           </ol>
         </div>
         <div class="browser"><div class="bar"><i></i><i></i><i></i><span>localhost:3000/admin</span></div>
-          <video src="videos/web-admin.mp4" controls muted playsinline preload="metadata" aria-label="Vidéo : métriques, liste des tontines et alertes dans l'espace administrateur"></video></div>
+          <video src="videos/web-admin.mp4" poster="apercus/web-admin.jpg" controls muted playsinline preload="metadata" aria-label="Vidéo : vue d'ensemble, tontines et alertes de l'administrateur"></video></div>
       </article>
-
     </div>
   </section>
 
-  <section class="section" aria-labelledby="status-h">
-    <h2 id="status-h">Statut d'un membre dans le tour en cours</h2>
+  <!-- ─────────────── Gallery ─────────────── -->
+  <section class="section" id="vues" aria-labelledby="vues-h">
+    <div class="chapter">
+      <span class="eyebrow">Référence</span>
+      <h2 id="vues-h">Toutes les vues</h2>
+      <p class="muted">Chaque écran de l'application et du tableau de bord. Cliquez sur une vue pour l'agrandir.</p>
+    </div>
+    <h3>Tableau de bord web</h3>
+    <div class="gallery web" id="gal-web"></div>
+    <h3>Application mobile</h3>
+    <div class="gallery mob" id="gal-mob"></div>
+  </section>
+
+  <!-- ─────────────── Rules ─────────────── -->
+  <section class="section" id="regles" aria-labelledby="regles-h">
+    <h2 id="regles-h">Règles configurables</h2>
+    <p class="muted">Chaque projet et chaque tontine a ses propres règles. Les valeurs par défaut sont celles retenues avec vous ; le gestionnaire peut les changer, et chaque modification est inscrite au journal.</p>
+    <div class="table-scroll rules">
+      <table>
+        <thead><tr><th>Projet collectif</th><th>Si activé</th><th>Par défaut</th></tr></thead>
+        <tbody>
+          <tr><td>Accepter les paiements partiels</td><td>Un versement inférieur au montant attendu est accepté ; le reste reste dû.</td><td><span class="def">Oui</span></td></tr>
+          <tr><td>Trop-perçu</td><td>Reporté sur les échéances suivantes (avance), ou paiement refusé.</td><td><span class="def">Reporté</span></td></tr>
+          <tr><td>Hausse : compléter les anciennes échéances</td><td>La hausse s'applique aussi aux échéances passées ; la différence devient due et se règle en premier.</td><td><span class="def">Oui</span></td></tr>
+          <tr><td>Hausse soumise à validation</td><td>Le gestionnaire doit approuver la hausse.</td><td><span class="def">Non</span></td></tr>
+          <tr><td>Baisse autorisée</td><td>Le participant peut baisser son palier.</td><td><span class="def">Oui</span></td></tr>
+          <tr><td>Baisse soumise à validation</td><td>Deuxième validation par le gestionnaire.</td><td><span class="def">Oui</span></td></tr>
+          <tr><td>Baisse appliquée aux échéances passées</td><td>L'argent déjà reçu est redistribué. Sinon, la baisse ne vaut qu'à partir de sa prise d'effet.</td><td><span class="def">Non</span></td></tr>
+          <tr><td>Rattrapage à l'arrivée</td><td>Un participant arrivé tard doit aussi les échéances passées.</td><td><span class="def">Non</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-scroll rules">
+      <table>
+        <thead><tr><th>Tontine</th><th>Choix</th><th>Par défaut</th></tr></thead>
+        <tbody>
+          <tr><td>Adhésion après le démarrage</td><td>Interdite, possible avec validation du gestionnaire, ou libre.</td><td><span class="def">Avec validation</span></td></tr>
+          <tr><td>Rattrapage des tours passés</td><td>Le membre accepté doit les tours ouverts avant son arrivée ; sinon, il doit à partir du tour en cours.</td><td><span class="def">Oui</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Un membre accepté en cours de cycle passe toujours en dernier dans l'ordre des bénéficiaires : le cycle s'allonge d'un tour. Un changement de palier déjà effectué garde la règle en vigueur au moment de sa demande, même si les règles changent ensuite.</p>
+  </section>
+
+  <!-- ─────────────── Import ─────────────── -->
+  <section class="section" id="import" aria-labelledby="import-h">
+    <h2 id="import-h">Importer un classeur Excel de cotisations</h2>
+    <p>Le script <code>scripts/import_classeur.py</code> lit un classeur au format « GESTION_COTISATIONS » et crée le projet correspondant : paramètres et paliers, membres, puis chaque cotisation mensuelle (montant, moyen, date) des feuilles <code>COTISATIONS_AAAA</code>.</p>
+    <div class="cmds">
+      <div class="cmd"><pre>python3 scripts/import_classeur.py GESTION_COTISATIONS.xlsx --dry-run</pre><button class="copy" type="button" data-copy="python3 scripts/import_classeur.py GESTION_COTISATIONS.xlsx --dry-run">Copier</button><span class="why">Lit le classeur et affiche ce qui serait importé, sans rien écrire.</span></div>
+      <div class="cmd"><pre>python3 scripts/import_classeur.py GESTION_COTISATIONS.xlsx --unite 1000</pre><button class="copy" type="button" data-copy="python3 scripts/import_classeur.py GESTION_COTISATIONS.xlsx --unite 1000">Copier</button><span class="why">Importe pour de bon (API lancée). <code>--unite</code> multiplie les montants : le classeur écrit « 15 » pour 15 000 FCFA.</span></div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Contrôle</th><th>Classeur</th><th>Après import</th></tr></thead>
+        <tbody>
+          <tr><td>Membres</td><td class="num">20</td><td class="num">20 participants</td></tr>
+          <tr><td>Total attendu (44 mois)</td><td class="num">25 740</td><td class="num">25 740 000 FCFA</td></tr>
+          <tr><td>Total encaissé</td><td class="num">13 156</td><td class="num">13 156 000 FCFA · 302 paiements</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="muted" style="margin:0; padding-left:1.2em; max-width:72ch; display:grid; gap:6px">
+      <li>Les membres deviennent des <b>participants sans compte</b> ; ils peuvent rejoindre l'application plus tard avec leur numéro.</li>
+      <li>Chaque paiement est importé <b>déjà validé, à sa date réelle</b>, et inscrit au journal (« Paiement importé du registre »). Les règles de saisie (partiel, trop-perçu) ne s'appliquent pas à l'historique.</li>
+      <li>Un versement qui couvre plusieurs mois (par exemple 120 000 FCFA d'un coup) est réparti automatiquement sur les échéances suivantes.</li>
+      <li>L'import est « tout ou rien » : une erreur annule tout.</li>
+    </ul>
+  </section>
+
+  <!-- ─────────────── Statuses ─────────────── -->
+  <section class="section" id="statuts" aria-labelledby="statuts-h">
+    <h2 id="statuts-h">Les statuts</h2>
+    <h3>Un membre dans le tour en cours</h3>
     <div class="statuses">
-      <div class="st"><span class="pill p-ok">paye</span><span>Un paiement a été validé pour ce tour.</span></div>
-      <div class="st"><span class="pill p-warn">en_attente</span><span>Un paiement est saisi mais pas encore validé.</span></div>
-      <div class="st"><span class="pill p-mute">a_payer</span><span>Rien n'est saisi, l'échéance n'est pas dépassée.</span></div>
-      <div class="st"><span class="pill p-bad">en_retard</span><span>Rien n'est validé et l'échéance du tour est passée.</span></div>
-      <div class="st"><span class="pill p-info">beneficiaire</span><span>Reçoit la cagnotte de ce tour, ne cotise pas.</span></div>
-      <div class="st"><span class="pill p-mute">suspendu</span><span>Écarté par le gestionnaire, n'est plus compté.</span></div>
+      <div class="st"><span class="pill p-ok">Payé</span><span>Un paiement a été validé pour ce tour.</span></div>
+      <div class="st"><span class="pill p-warn">À valider</span><span>Un paiement est saisi mais pas encore validé.</span></div>
+      <div class="st"><span class="pill p-mute">À payer</span><span>Rien n'est saisi, l'échéance n'est pas dépassée.</span></div>
+      <div class="st"><span class="pill p-bad">En retard</span><span>Rien n'est validé et l'échéance du tour est passée.</span></div>
+      <div class="st"><span class="pill p-info">Bénéficiaire</span><span>Reçoit la cagnotte de ce tour, ne cotise pas.</span></div>
+      <div class="st"><span class="pill p-info">Adhésion à valider</span><span>A rejoint après le démarrage, attend l'accord du gestionnaire.</span></div>
+    </div>
+    <h3>Une échéance de projet</h3>
+    <div class="statuses">
+      <div class="st"><span class="pill p-ok">Soldée</span><span>Couverte entièrement, y compris par une avance.</span></div>
+      <div class="st"><span class="pill p-warn">Partielle</span><span>Payée en partie ; le reste est dû.</span></div>
+      <div class="st"><span class="pill p-bad">En retard</span><span>Date passée et rien n'a été payé.</span></div>
+      <div class="st"><span class="pill p-mute">À venir</span><span>Date future, rien d'affecté pour l'instant.</span></div>
     </div>
   </section>
 
-  <section class="section" aria-labelledby="faq-h">
+  <section class="section" id="faq" aria-labelledby="faq-h">
     <h2 id="faq-h">Questions fréquentes</h2>
     <div class="faq">
       <details><summary>Le téléphone affiche « Erreur réseau » ou « Erreur serveur (504) »</summary>
-        <p>Vérifiez que l'API tourne (<code>make api</code>) et que les ports sont redirigés : <code>adb reverse tcp:5243 tcp:5243</code>. La redirection se perd quand le câble USB est rebranché. L'application contourne désormais le proxy imposé par certains opérateurs (APN Orange) pour les adresses locales, ce qui provoquait l'erreur 504 en données mobiles.</p></details>
+        <p>Vérifiez que l'API tourne (<code>make api</code>) et la redirection USB : <code>adb reverse tcp:5243 tcp:5243</code>, à refaire après avoir rebranché le câble. L'application contourne le proxy imposé par certains opérateurs pour les adresses locales, ce qui provoquait l'erreur 504 sur les données mobiles.</p></details>
       <details><summary>Je ne reçois pas le code OTP</summary>
-        <p>En développement, un faux fournisseur SMS écrit les messages dans les logs de l'API. Utilisez <code>make otp TEL=+226XXXXXXXX</code> pour afficher le code en cours (valable 5 minutes).</p></details>
+        <p>En développement, un faux fournisseur SMS écrit les messages dans les journaux de l'API. Utilisez <code>make otp TEL=+2376XXXXXXXX</code>.</p></details>
       <details><summary>Comment donner le rôle de gestionnaire à un compte ?</summary>
-        <p>Un compte qui s'inscrit est <i>Membre</i>. Pour le moment, le rôle se change avec <code>scripts/demo.sh role +226XXXXXXXX Gestionnaire</code>. Un écran d'administration est prévu.</p></details>
+        <p>Un compte qui s'inscrit est membre. Pour l'instant : <code>scripts/demo.sh role +2376XXXXXXXX Gestionnaire</code>. Un écran d'administration est prévu.</p></details>
+      <details><summary>Un membre n'a pas de smartphone</summary>
+        <p>Dans un projet, le gestionnaire l'inscrit avec <b>Inscrire un participant</b> (nom et palier) et encaisse ses paiements pour lui. Dans une tontine, le gestionnaire peut aussi l'ajouter par son nom.</p></details>
       <details><summary>Le paiement Mobile Money n'apparaît pas</summary>
-        <p>Il est désactivé par défaut (<code>Features:MobileMoney</code> à <code>false</code>), puisque dans le modèle retenu l'argent reste hors de l'application. Il pourra être réactivé plus tard.</p></details>
+        <p>Il est désactivé par défaut (<code>Features:MobileMoney</code>) puisque l'argent reste hors de l'application.</p></details>
       <details><summary>Limites connues de cette version</summary>
         <ul>
-          <li>Le volet <b>Projet collectif</b> (paliers d'engagement, paiements partiels, report du trop-perçu, baisse de palier soumise à validation, dépenses) et l'adhésion à une tontine déjà démarrée ont été ajoutés après le tournage : ils ne sont pas encore filmés ici.</li>
-          <li>La validation est faite par le gestionnaire ; un rôle Trésorier distinct est prévu en phase 1.</li>
-          <li>Dans la vidéo web, la carte « Paiements confirmés » affiche « sur 4 » : le bénéficiaire était compté à tort. C'est corrigé depuis (« sur 3 »).</li>
-          <li>Deux paiements saisis exactement au même instant sur une même tontine pourraient créer une bifurcation dans la chaîne d'audit (verrou prévu avec le registre commun).</li>
+          <li>La validation est faite par le gestionnaire ; un rôle Trésorier distinct, pour un vrai double contrôle, est prévu.</li>
+          <li>L'import Excel se fait en ligne de commande ; un bouton d'import dans le tableau de bord est prévu.</li>
+          <li>Les messages d'erreur renvoyés par l'API sont encore en anglais.</li>
         </ul></details>
     </div>
   </section>
 
-  <footer>Enregistré le 15 novembre 2026 sur un Redmi (Android 15) et dans Chromium, avec l'environnement de développement local et les données de démonstration ci-dessus.</footer>
+  <footer>Filmé le 16 novembre 2026 sur un Redmi (Android 15) et dans Chromium, avec l'environnement local, les comptes de démonstration ci-dessus et le classeur de cotisations de l'association.</footer>
 </div>
 
+<dialog id="zoom" aria-label="Vue agrandie"><button type="button" id="zoom-close">Fermer</button><img alt=""><p></p></dialog>
+
 <script>
-document.querySelectorAll('.copy').forEach(function (btn) {
-  btn.addEventListener('click', function () {
-    var text = btn.getAttribute('data-copy');
-    var done = function () { btn.textContent = 'Copié'; setTimeout(function () { btn.textContent = 'Copier'; }, 1500); };
-    try {
-      navigator.clipboard.writeText(text).then(done, function () { select(btn); });
-    } catch (e) { select(btn); }
+var WEB = [
+  ["01-accueil", "Page d'accueil", "positionnement et offres"],
+  ["02-connexion", "Connexion", "espace gestionnaire, +237 pré-rempli"],
+  ["03-tontine", "Tableau de bord tontine", "tour, collecte, membres, arriérés"],
+  ["04-tontine-membres", "Membres du tour", "statuts, reste dû, relances, collecte par tour"],
+  ["05-paiements", "Paiements", "encaisser, valider, rejeter"],
+  ["06-projets", "Projets collectifs", "liste et progression"],
+  ["07-projet", "Projet", "objectif, solde, collecté / attendu"],
+  ["08-projet-participants", "Participants", "triés par reste dû, une case par échéance"],
+  ["09-projet-regles", "Règles et journal", "règles modifiables, journal chaîné"],
+  ["10-audit", "Journal d'audit", "chronologie et intégrité"],
+  ["11-admin", "Vue d'ensemble", "administrateur"],
+  ["12-admin-tontines", "Tontines", "recherche"],
+  ["13-admin-alertes", "Alertes", "filtre par gravité"],
+  ["14-projet-sombre", "Thème sombre", "suit le réglage de l'appareil"]
+];
+var MOB = [
+  ["01-presentation", "Présentation"], ["02-connexion", "Connexion"], ["03-inscription", "Inscription"],
+  ["04-otp", "Code OTP"], ["05-accueil", "Accueil"], ["06-tontine-brouillon", "Tontine en brouillon"],
+  ["07-code-invitation", "Code d'invitation"], ["08-rejoindre-tontine", "Rejoindre une tontine"], ["09-activer", "Activer la tontine"],
+  ["10-tour-en-cours", "Tour en cours"], ["11-gestion-tour", "Gestion du tour"], ["12-payer", "Payer ma cotisation"],
+  ["13-versements", "Mes versements"], ["14-rejoindre-projet", "Rejoindre un projet"], ["15-engagement", "Mon engagement"],
+  ["16-changer-palier", "Changer de palier"], ["17-baisse-en-attente", "Baisse en attente"], ["18-profil", "Profil"]
+];
+var zoom = document.getElementById("zoom");
+function ouvrir(src, texte) {
+  zoom.querySelector("img").src = src;
+  zoom.querySelector("img").alt = texte;
+  zoom.querySelector("p").textContent = texte;
+  if (zoom.showModal) zoom.showModal(); else zoom.setAttribute("open", "");
+}
+document.getElementById("zoom-close").addEventListener("click", function () { zoom.close(); });
+zoom.addEventListener("click", function (e) { if (e.target === zoom) zoom.close(); });
+function remplir(id, liste, prefixe) {
+  var el = document.getElementById(id);
+  liste.forEach(function (v) {
+    var src = "vues/" + prefixe + "-" + v[0] + ".jpg";
+    var texte = v[1] + (v[2] ? " · " + v[2] : "");
+    var fig = document.createElement("figure"); fig.className = "shot";
+    var b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", "Agrandir : " + texte);
+    var img = document.createElement("img"); img.src = src; img.alt = texte; img.loading = "lazy";
+    b.appendChild(img); b.addEventListener("click", function () { ouvrir(src, texte); });
+    var cap = document.createElement("figcaption"); cap.innerHTML = "<b>" + v[1] + "</b>" + (v[2] ? " · " + v[2] : "");
+    fig.appendChild(b); fig.appendChild(cap); el.appendChild(fig);
+  });
+}
+remplir("gal-web", WEB, "web");
+remplir("gal-mob", MOB, "mobile");
+
+document.querySelectorAll(".copy").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    var text = btn.getAttribute("data-copy");
+    var done = function () { btn.textContent = "Copié"; setTimeout(function () { btn.textContent = "Copier"; }, 1500); };
+    try { navigator.clipboard.writeText(text).then(done, function () { select(btn); }); } catch (e) { select(btn); }
   });
 });
 function select(btn) {
-  var pre = btn.parentElement.querySelector('pre');
+  var pre = btn.parentElement.querySelector("pre");
   var r = document.createRange(); r.selectNodeContents(pre);
   var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
-  btn.textContent = 'Sélectionné';
+  btn.textContent = "Sélectionné";
 }
 </script>
