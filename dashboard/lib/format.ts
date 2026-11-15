@@ -63,5 +63,7 @@ const ACTIONS: Record<string, string> = {
   DepenseValidee: "Dépense validée",
   DepenseRejetee: "Dépense rejetée",
   ReglesModifiees: "Règles modifiées",
+  ParticipantInscrit: "Participant inscrit",
+  PaiementImporte: "Paiement importé du registre",
 };
 export const libelleAction = (a: string) => ACTIONS[a] ?? a;

@@ -93,7 +93,8 @@ interface BackendTontineDetailsDto {
 function mapStatutPaiement(statut: string): StatutPaiement | undefined {
   if (statut === 'paye') return 'paye';
   if (statut === 'en_retard') return 'en_retard';
-  if (statut === 'en_attente' || statut === 'a_payer') return 'en_attente';
+  if (statut === 'en_attente') return 'en_attente';
+  if (statut === 'a_payer') return 'a_payer';
   if (statut === 'adhesion_en_attente') return 'adhesion_en_attente';
   return undefined; // beneficiaire, suspendu
 }

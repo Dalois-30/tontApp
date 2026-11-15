@@ -66,6 +66,18 @@ public class ProjetController : ControllerBase
     public Task<IActionResult> Rejoindre([FromBody] RejoindreProjetRequest r, CancellationToken ct) =>
         Run(() => _service.RejoindreAsync(r.Code, r.Nom, r.Palier, UserId, ct));
 
+    /// <summary>Register a participant who has no account (gestionnaire).</summary>
+    [HttpPost("{id:guid}/participants")]
+    public Task<IActionResult> AjouterParticipant(Guid id, [FromBody] ParticipantSansCompteRequest r, CancellationToken ct) =>
+        Run(() => _service.AjouterParticipantAsync(id, r, UserId, Admin, ct));
+
+    /// <summary>Import participants and historical payments from a previous register (all or nothing).</summary>
+    [HttpPost("{id:guid}/import")]
+    [RequestSizeLimit(5_000_000)]
+    public Task<IActionResult> Importer(Guid id, [FromBody] ImportProjetRequest r, CancellationToken ct) =>
+        Run(() => _service.ImporterAsync(id, r, UserId, Admin, ct),
+            x => Ok(new { participants = x.Participants, paiements = x.Paiements, montant = x.Montant, projet = x.Projet }));
+
     /// <summary>The caller changes their own tier: applied right away or pending approval, per the project's rules.</summary>
     [HttpPut("{id:guid}/mon-palier")]
     public Task<IActionResult> ChangerMonPalier(Guid id, [FromBody] ChangerPalierRequest r, CancellationToken ct) =>

@@ -88,7 +88,7 @@ export async function registerForPushNotifications(): Promise<void> {
 
     // Set up the Android notification channel
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'TontinesApp',
+      name: 'TontApp',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#1B5E20',

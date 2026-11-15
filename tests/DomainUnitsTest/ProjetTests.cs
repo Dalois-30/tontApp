@@ -340,4 +340,33 @@ public class ProjetTests
         p.Clore(G);
         Assert.Throws<InvalidOperationException>(() => p.ModifierRegles(ReglesProjet.ParDefaut, G));
     }
+
+    // ── Participants sans compte et import ──────────────────────────
+
+    [Fact]
+    public void Gestionnaire_CanRegisterParticipantWithoutAccount()
+    {
+        var (p, _) = Nouveau();
+        var x = p.AjouterParticipant("BEMO Grace", 15_000m, Debut, G);
+        Assert.Null(x.UtilisateurId);
+        Assert.Throws<InvalidOperationException>(() => p.AjouterParticipant("bemo grace", 15_000m, Debut, G));
+        Assert.Equal("ParticipantInscrit", p.Journal.OrderBy(j => j.Sequence).Last().Action);
+    }
+
+    [Fact]
+    public void ImportedPayments_AreValidatedAtTheirDate_AndAllocated()
+    {
+        var (p, _) = Nouveau();
+        var x = p.AjouterParticipant("FOTSO Mathias", 15_000m, Debut, G);
+        p.ImporterPaiement(x.Id, 15_000m, Debut.AddDays(6), "Cash", G);
+        p.ImporterPaiement(x.Id, 45_000m, Debut.AddDays(70), "Cash", G); // catches up instalments 2 and 3, + 1 in advance
+
+        var s = p.Situation(x.Id, Debut.AddDays(70));
+        Assert.Equal(60_000m, s.TotalPaye);
+        Assert.Equal(0m, s.ResteDuExigible);
+        Assert.Equal(15_000m, s.Avance);
+        Assert.All(p.Paiements, y => Assert.Equal(StatutOperation.Validee, y.Statut));
+        Assert.Throws<InvalidOperationException>(() => p.ImporterPaiement(x.Id, 5_000m, Debut.AddDays(-30), "Cash", G));
+        Assert.True(p.VerifierJournal());
+    }
 }

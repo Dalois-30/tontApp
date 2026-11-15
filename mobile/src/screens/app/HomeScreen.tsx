@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect } from '@react-navigation/native';
+import { useAuthStore } from '../../store/authStore';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../../navigation/types';
 import type { TontineSummary } from '../../types/api';
@@ -47,6 +48,7 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
     gcTime: QUERY_CACHE_TIME_MS,
   });
 
+  const prenom = useAuthStore((st) => st.user?.nom?.split(' ')[0] ?? '');
   const { data: projets, refetch: refetchProjets } = useQuery<ProjetResume[], Error>({
     queryKey: ['projets'],
     queryFn: projetService.mesProjets,
@@ -100,7 +102,7 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <Text style={styles.greeting}>Mes Tontines</Text>
+        <Text style={styles.greeting}>{prenom ? `Bonjour ${prenom}` : 'Bonjour'}</Text>
         <View style={styles.topBarActions}>
           <TouchableOpacity
             onPress={handleNavigateRejoindre}

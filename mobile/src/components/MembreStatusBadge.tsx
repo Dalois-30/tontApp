@@ -24,8 +24,13 @@ const STATUS_CONFIG: Record<
     textColor: '#FFFFFF',
   },
   en_attente: {
-    label: 'En attente',
+    label: 'À valider',
     backgroundColor: '#E65100',     // deep orange – contrast 5.0:1 on white
+    textColor: '#FFFFFF',
+  },
+  a_payer: {
+    label: 'À payer',
+    backgroundColor: '#5F6B63',     // neutral – contrast 5.6:1 on white
     textColor: '#FFFFFF',
   },
   en_retard: {

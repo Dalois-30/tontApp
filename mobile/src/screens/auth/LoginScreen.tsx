@@ -89,7 +89,7 @@ export function LoginScreen({ navigation }: Props): React.JSX.Element {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.title}>TontinesApp</Text>
+          <Text style={styles.title}>TontApp</Text>
           <Text style={styles.subtitle}>
             Connectez-vous à votre compte
           </Text>

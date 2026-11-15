@@ -49,7 +49,7 @@ export function ProfilScreen(): React.JSX.Element {
   }, [logout]);
 
   const handleWhatsAppSupport = useCallback(() => {
-    Linking.openURL('https://wa.me/221771234567?text=Bonjour%2C%20j%27ai%20besoin%20d%27aide%20avec%20TontinesApp');
+    Linking.openURL('https://wa.me/221771234567?text=Bonjour%2C%20j%27ai%20besoin%20d%27aide%20avec%20TontApp');
   }, []);
 
   const handleNavigateHistorique = useCallback(() => {

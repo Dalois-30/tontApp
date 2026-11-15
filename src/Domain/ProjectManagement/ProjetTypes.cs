@@ -61,7 +61,7 @@ public sealed class Participant : Entity<Guid>
 
     private Participant() { }
 
-    internal Participant(string nom, UtilisateurId utilisateurId, decimal palier, DateTime maintenant) : base(Guid.NewGuid())
+    internal Participant(string nom, UtilisateurId? utilisateurId, decimal palier, DateTime maintenant) : base(Guid.NewGuid())
     {
         Nom = nom;
         UtilisateurId = utilisateurId;
@@ -155,6 +155,16 @@ public sealed class PaiementProjet : Entity<Guid>
         SaisiLe = maintenant;
         SaisiPar = acteur;
     }
+
+    /// <summary>Historical payment imported from a register: already validated at its own date.</summary>
+    internal static PaiementProjet Historique(Guid participantId, decimal montant, string preuve, string acteur, DateTime date) =>
+        new(participantId, montant, preuve, acteur, date)
+        {
+            Statut = StatutOperation.Validee,
+            DecideLe = date,
+            DecidePar = acteur,
+            Reference = "IMPORT",
+        };
 
     internal void Decider(bool valide, string acteur, string? referenceOuMotif, DateTime maintenant)
     {

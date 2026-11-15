@@ -39,7 +39,7 @@ export function PartagerInvitation({
     `💰 Cotisation : ${formatMontant(montant)}`,
     `📲 Code d'invitation : ${invitationCode}`,
     '',
-    `Télécharge l'app TontinesApp et utilise ce code pour rejoindre le groupe.`,
+    `Télécharge l'app TontApp et utilise ce code pour rejoindre le groupe.`,
   ].join('\n');
 
   const handleShare = useCallback(async () => {

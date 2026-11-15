@@ -153,6 +153,42 @@ public sealed class Projet : AggregateRoot<ProjetId>
         return participant;
     }
 
+    /// <summary>
+    /// The gestionnaire registers a participant who has no account (no smartphone, or data imported
+    /// from a paper/Excel register). <paramref name="dateAdhesion"/> sets which instalments they owe.
+    /// </summary>
+    public Participant AjouterParticipant(string nom, decimal palier, DateTime dateAdhesion, string acteur)
+    {
+        if (Statut is not (StatutProjet.Brouillon or StatutProjet.Ouvert))
+            throw new InvalidOperationException("This project no longer accepts participants.");
+        if (!_paliers.Contains(palier)) throw new InvalidOperationException("This tier is not offered by the project.");
+        if (string.IsNullOrWhiteSpace(nom)) throw new ArgumentException("Name must not be empty.", nameof(nom));
+        if (_participants.Any(p => string.Equals(p.Nom, nom.Trim(), StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"A participant named '{nom.Trim()}' already exists.");
+
+        var participant = new Participant(nom.Trim(), null, palier, dateAdhesion);
+        _participants.Add(participant);
+        Journaliser("ParticipantInscrit", acteur, new { ParticipantId = participant.Id, participant.Nom, Palier = palier, DateAdhesion = dateAdhesion });
+        return participant;
+    }
+
+    /// <summary>
+    /// Imports a payment from a previous register (Excel, notebook): recorded as validated at its
+    /// historical date, without the entry-time rules (partial/overpayment), and journaled as an import.
+    /// </summary>
+    public PaiementProjet ImporterPaiement(Guid participantId, decimal montant, DateTime date, string moyen, string acteur)
+    {
+        if (Statut is not (StatutProjet.Brouillon or StatutProjet.Ouvert))
+            throw new InvalidOperationException("Payments cannot be imported into a closed project.");
+        if (montant <= 0) throw new ArgumentException("Amount must be greater than zero.", nameof(montant));
+        if (date.Date < Participant(participantId).DateAdhesion.Date)
+            throw new InvalidOperationException("An imported payment cannot predate the participant's membership.");
+        var paiement = PaiementProjet.Historique(participantId, montant, $"Import du registre · {moyen}", acteur, date);
+        _paiements.Add(paiement);
+        Journaliser("PaiementImporte", acteur, new { PaiementId = paiement.Id, ParticipantId = participantId, Montant = montant, Date = date, Moyen = moyen });
+        return paiement;
+    }
+
     // ── Tier changes ────────────────────────────────────────────────
 
     /// <summary>

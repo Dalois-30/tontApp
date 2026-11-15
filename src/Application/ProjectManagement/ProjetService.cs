@@ -66,6 +66,14 @@ public sealed record ProjetDetailsDto(
 public sealed record ProjetApercuDto(string Nom, string? Description, decimal Objectif, IReadOnlyList<decimal> Paliers,
     string Periodicite, DateTime DateDebut, int NombreEcheances, int Participants, ReglesProjetDto Regles);
 
+public sealed record ParticipantSansCompteRequest(string Nom, decimal Palier, DateTime? DateAdhesion);
+
+/// <summary>Bulk import from a previous register (Excel, notebook). References link payments to participants.</summary>
+public sealed record ImportProjetRequest(List<ImportParticipant> Participants, List<ImportPaiement> Paiements);
+public sealed record ImportParticipant(string Reference, string Nom, decimal Palier, DateTime DateAdhesion);
+public sealed record ImportPaiement(string Reference, decimal Montant, DateTime Date, string? Moyen);
+public sealed record ImportResultat(int Participants, int Paiements, decimal Montant, ProjetDetailsDto Projet);
+
 public sealed class ProjetIntrouvableException(string message = "Project not found.") : Exception(message);
 public sealed class AccesProjetRefuseException(string message = "You do not have access to this project.") : Exception(message);
 
@@ -232,6 +240,34 @@ public sealed class ProjetService
         var p = await _projets.GetByCodeHashAsync(hash, ct) ?? throw new InvalidOperationException("Invalid or expired invitation code.");
         p.Rejoindre(code, nom, UtilisateurId.From(userId), palier, Maintenant);
         return await Enregistrer(p, userId, false, ct);
+    }
+
+    public async Task<ProjetDetailsDto> AjouterParticipantAsync(Guid id, ParticipantSansCompteRequest r, Guid userId, bool admin, CancellationToken ct)
+    {
+        var p = await Charger(id, userId, admin, Role.Gestionnaire, ct);
+        p.AjouterParticipant(r.Nom, r.Palier, r.DateAdhesion ?? Maintenant, userId.ToString());
+        return await Enregistrer(p, userId, admin, ct);
+    }
+
+    /// <summary>Imports participants and their historical payments in one transaction (all or nothing).</summary>
+    public async Task<ImportResultat> ImporterAsync(Guid id, ImportProjetRequest r, Guid userId, bool admin, CancellationToken ct)
+    {
+        var p = await Charger(id, userId, admin, Role.Gestionnaire, ct);
+        var acteur = userId.ToString();
+        var refs = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        foreach (var x in r.Participants)
+        {
+            var existant = p.Participants.FirstOrDefault(y => string.Equals(y.Nom, x.Nom.Trim(), StringComparison.OrdinalIgnoreCase));
+            refs[x.Reference] = existant?.Id ?? p.AjouterParticipant(x.Nom, x.Palier, DateTime.SpecifyKind(x.DateAdhesion, DateTimeKind.Utc), acteur).Id;
+        }
+        foreach (var x in r.Paiements.OrderBy(x => x.Date))
+        {
+            if (!refs.TryGetValue(x.Reference, out var pid))
+                throw new InvalidOperationException($"Payment for unknown participant reference '{x.Reference}'.");
+            p.ImporterPaiement(pid, x.Montant, DateTime.SpecifyKind(x.Date, DateTimeKind.Utc), x.Moyen ?? "non précisé", acteur);
+        }
+        var details = await Enregistrer(p, userId, admin, ct);
+        return new ImportResultat(r.Participants.Count, r.Paiements.Count, r.Paiements.Sum(x => x.Montant), details);
     }
 
     /// <summary>The participant changes their own tier, according to the project's rules.</summary>

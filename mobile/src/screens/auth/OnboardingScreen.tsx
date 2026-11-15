@@ -31,7 +31,7 @@ interface Slide {
 const slides: Slide[] = [
   {
     id: '1',
-    title: "C'est quoi TontinesApp ?",
+    title: "C'est quoi TontApp ?",
     description:
       'Une application moderne pour organiser et gérer vos tontines en toute transparence. Fini les carnets et les oublis !',
     emoji: '💰',

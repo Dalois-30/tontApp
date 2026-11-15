@@ -7,7 +7,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { TontineSummary } from '../types/api';
-import { formatMontant, daysUntil } from '../utils/format';
+import { formatMontant, daysUntil, libelleStatut, libellePeriodicite } from '../utils/format';
 import {
   colors,
   spacing,
@@ -40,7 +40,7 @@ export function TontineCard({
       onPress={() => onPress(tontine.id)}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityLabel={`Tontine ${tontine.nom}, ${tontine.status}`}
+      accessibilityLabel={`Tontine ${tontine.nom}, ${libelleStatut(tontine.status)}`}
     >
       <View style={styles.header}>
         <Text style={styles.title} numberOfLines={1}>
@@ -65,7 +65,7 @@ export function TontineCard({
                 : styles.statusDefault,
             ]}
           >
-            <Text style={styles.statusText}>{tontine.status}</Text>
+            <Text style={styles.statusText}>{libelleStatut(tontine.status)}</Text>
           </View>
         </View>
       </View>
@@ -77,7 +77,7 @@ export function TontineCard({
       ) : null}
 
       <Text style={styles.amount}>
-        {formatMontant(tontine.montantCotisation)} / {tontine.frequence}
+        {formatMontant(tontine.montantCotisation)} – {libellePeriodicite(tontine.frequence).toLowerCase()}
       </Text>
 
       <Text style={styles.members}>

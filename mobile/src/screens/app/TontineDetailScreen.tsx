@@ -27,7 +27,7 @@ import { ProgressBar } from '../../components/ProgressBar';
 import { MembreStatusBadge } from '../../components/MembreStatusBadge';
 import { CountdownTimer } from '../../components/CountdownTimer';
 import { TontineDetailSkeleton } from '../../components/SkeletonLoader';
-import { formatMontant } from '../../utils/format';
+import { formatMontant, libelleStatut, libellePeriodicite } from '../../utils/format';
 import {
   colors,
   spacing,
@@ -236,7 +236,7 @@ export function TontineDetailScreen({
 
       <View style={styles.infoRow}>
         <Text style={styles.label}>Statut</Text>
-        <Text style={styles.value}>{tontine.status}</Text>
+        <Text style={styles.value}>{libelleStatut(tontine.status)}</Text>
       </View>
       <View style={styles.infoRow}>
         <Text style={styles.label}>Cotisation</Text>
@@ -246,7 +246,7 @@ export function TontineDetailScreen({
       </View>
       <View style={styles.infoRow}>
         <Text style={styles.label}>Fréquence</Text>
-        <Text style={styles.value}>{tontine.frequence}</Text>
+        <Text style={styles.value}>{libellePeriodicite(tontine.frequence)}</Text>
       </View>
       <View style={styles.infoRow}>
         <Text style={styles.label}>Gestionnaire</Text>

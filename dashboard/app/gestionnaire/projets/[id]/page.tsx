@@ -28,6 +28,11 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
   const [motif, setMotif] = useState("");
   const [aRejeter, setARejeter] = useState<{ type: "paiements" | "depenses"; id: string; nom: string } | null>(null);
   const [regles, setRegles] = useState<ReglesProjet | null>(null);
+  const [toutVoir, setToutVoir] = useState(false);
+  const [filtrePayeur, setFiltrePayeur] = useState("");
+  const [inscription, setInscription] = useState(false);
+  const [nomInscrit, setNomInscrit] = useState("");
+  const [palierInscrit, setPalierInscrit] = useState("");
 
   const charger = useCallback(async () => {
     const res = await fetch(`/api/projets/${id}`);
@@ -80,6 +85,11 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
   const enAttente = p.paiements.filter((x) => x.statut === "en_attente").length;
   const depensesEnAttente = p.depenses.filter((x) => x.statut === "en_attente").length;
   const choisi = p.participants.find((x) => x.id === payeur);
+  // Pending first, then most recent; long histories (imported registers) are paged.
+  const paiementsFiltres = p.paiements
+    .filter((x) => !filtrePayeur || x.participantId === filtrePayeur)
+    .sort((a, b) => Number(b.statut === "en_attente") - Number(a.statut === "en_attente") || b.saisiLe.localeCompare(a.saisiLe));
+  const listePaiements = toutVoir ? paiementsFiltres : paiementsFiltres.slice(0, 10);
   const modifiable = p.statut === "Brouillon" || p.statut === "Ouvert";
 
   function choisirPayeur(pid: string) {
@@ -128,8 +138,8 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
           <Meter value={p.progression} label="Progression vers l'objectif" />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div className="card p-5"><p className="text-[12.5px] text-ink-2">Solde disponible</p><p className="text-[22px] font-semibold mt-1">{formatMontant(p.solde)}</p></div>
-          <div className="card p-5"><p className="text-[12.5px] text-ink-2">Dépenses validées</p><p className="text-[22px] font-semibold mt-1">{formatMontant(p.totalDepense)}</p></div>
+          <div className="card p-5"><p className="text-[12.5px] text-ink-2">Solde disponible</p><p className="text-[19px] font-semibold mt-1 whitespace-nowrap">{formatMontant(p.solde)}</p></div>
+          <div className="card p-5"><p className="text-[12.5px] text-ink-2">Dépenses validées</p><p className="text-[19px] font-semibold mt-1 whitespace-nowrap">{formatMontant(p.totalDepense)}</p></div>
           <div className="card p-5"><p className="text-[12.5px] text-ink-2">Participants</p><p className="text-[22px] font-semibold mt-1">{p.participants.length}</p></div>
           <div className="card p-5"><p className="text-[12.5px] text-ink-2">Journal</p>
             <p className={`mt-1 inline-flex items-center gap-1.5 text-[16px] font-semibold ${p.journalValide ? "text-good" : "text-bad"}`}>
@@ -160,8 +170,28 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
         </Card>
       )}
 
-      <Card title="Participants" bodyClassName="pt-3"
-        subtitle="Une case par échéance. Un trop-perçu se reporte sur les échéances suivantes ; cliquez sur une ligne pour le détail.">
+      <Card title={`Participants (${p.participants.length})`} bodyClassName="pt-3"
+        actions={modifiable ? <button onClick={() => setInscription((v) => !v)} className="btn-secondary btn-sm"><Icon name="plus" className="h-3.5 w-3.5" />Inscrire un participant</button> : undefined}
+        subtitle="Triés par reste dû. Une case par échéance ; un trop-perçu se reporte sur les suivantes. Cliquez sur une ligne pour le détail.">
+        {inscription && (
+          <form className="mx-5 md:mx-6 mb-4 grid grid-cols-1 md:grid-cols-[1.5fr_1fr_auto_auto] gap-3 items-end rounded-lg border border-line bg-surface-2 p-3"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (await action("/participants", { nom: nomInscrit, palier: Number(palierInscrit) }, `${nomInscrit} est inscrit au projet.`)) {
+                setNomInscrit(""); setPalierInscrit(""); setInscription(false);
+              }
+            }}>
+            <div><label htmlFor="nom-inscrit" className="label">Nom du participant (sans compte dans l&apos;application)</label>
+              <input id="nom-inscrit" value={nomInscrit} onChange={(e) => setNomInscrit(e.target.value)} required className="input" /></div>
+            <div><label htmlFor="palier-inscrit" className="label">Palier</label>
+              <select id="palier-inscrit" value={palierInscrit} onChange={(e) => setPalierInscrit(e.target.value)} required className="input">
+                <option value="">Choisir</option>
+                {p.paliers.map((x) => <option key={x} value={x}>{formatMontant(x)}</option>)}
+              </select></div>
+            <button type="submit" disabled={busy} className="btn-primary h-10">Inscrire</button>
+            <button type="button" onClick={() => setInscription(false)} className="btn-ghost h-10">Annuler</button>
+          </form>
+        )}
         <ul className="flex flex-wrap gap-x-5 gap-y-1 px-5 md:px-6 pb-3 text-[12.5px] text-ink-2">
           {Object.entries(CASE_LIBELLE).map(([k, l]) => (
             <li key={k} className="inline-flex items-center gap-2"><span className={`h-3 w-3 rounded-[3px] ${CASE[k]}`} />{l}</li>
@@ -174,7 +204,7 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
               {p.participants.length === 0 && (
                 <tr><td colSpan={6}><EmptyState icon="users" title="Aucun participant">Générez un code d&apos;invitation et partagez-le.</EmptyState></td></tr>
               )}
-              {p.participants.map((x) => (
+              {[...p.participants].sort((a, b) => b.resteDuExigible - a.resteDuExigible).map((x) => (
                 <tr key={x.id} className="cursor-pointer" onClick={() => setOuvert(ouvert === x.id ? null : x.id)} aria-expanded={ouvert === x.id}>
                   <td className="font-medium text-ink whitespace-nowrap">{x.nom}
                     {x.palierDemande !== null && <span className="block text-[12px] text-info font-normal">demande {formatMontant(x.palierDemande)}</span>}</td>
@@ -183,10 +213,10 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
                   <td className={`text-right num whitespace-nowrap ${x.resteDuExigible > 0 ? "text-bad font-medium" : "text-muted"}`}>{formatMontant(x.resteDuExigible)}</td>
                   <td className="text-right num whitespace-nowrap text-ink-2">{formatMontant(x.avance)}</td>
                   <td>
-                    <div className="flex gap-[3px]">
+                    <div className="flex gap-[2px]">
                       {(x.echeances ?? []).map((e) => (
                         <span key={e.numero} title={`Échéance ${e.numero} · ${formatJour(e.date)} · ${formatMontant(e.paye)} / ${formatMontant(e.palier)} (${CASE_LIBELLE[e.statut]})`}
-                          className={`h-5 w-3 rounded-[3px] ${CASE[e.statut]}`} />
+                          className={`h-5 ${(x.echeances?.length ?? 0) > 24 ? "w-2 rounded-[2px]" : "w-3 rounded-[3px]"} ${CASE[e.statut]}`} />
                       ))}
                     </div>
                     {ouvert === x.id && (
@@ -253,10 +283,22 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
         )}
 
         {p.paiements.length > 0 && (
-          <div className="overflow-x-auto mt-5 -mx-5 md:-mx-6 border-t border-line">
+          <>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[13px] text-ink-2">
+              {listePaiements.length < paiementsFiltres.length
+                ? `${listePaiements.length} sur ${paiementsFiltres.length} paiements`
+                : `${paiementsFiltres.length} paiement(s)`}{filtrePayeur ? " pour ce participant" : ""}
+            </p>
+            <select aria-label="Filtrer par participant" value={filtrePayeur} onChange={(e) => setFiltrePayeur(e.target.value)} className="input h-9 w-64">
+              <option value="">Tous les participants</option>
+              {p.participants.map((x) => <option key={x.id} value={x.id}>{x.nom}</option>)}
+            </select>
+          </div>
+          <div className="overflow-x-auto mt-3 -mx-5 md:-mx-6 border-t border-line">
             <table className="table">
               <thead><tr><th>Participant</th><th className="text-right">Montant</th><th>Preuve</th><th>Statut</th><th>Saisi le</th><th className="text-right">Actions</th></tr></thead>
-              <tbody>{p.paiements.map((x) => (
+              <tbody>{listePaiements.map((x) => (
                 <tr key={x.id}>
                   <td className="font-medium text-ink">{x.participantNom}</td>
                   <td className="text-right num">{formatMontant(x.montant)}</td>
@@ -276,6 +318,12 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
               ))}</tbody>
             </table>
           </div>
+          {paiementsFiltres.length > listePaiements.length && (
+            <div className="-mx-5 md:-mx-6 -mb-5 md:-mb-6 border-t border-line px-5 md:px-6 py-3">
+              <button onClick={() => setToutVoir(true)} className="btn-ghost btn-sm">Afficher les {paiementsFiltres.length} paiements</button>
+            </div>
+          )}
+          </>
         )}
       </Card>
 

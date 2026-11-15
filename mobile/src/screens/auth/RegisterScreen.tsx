@@ -118,7 +118,7 @@ export function RegisterScreen({ navigation }: Props): React.JSX.Element {
         <View style={styles.header}>
           <Text style={styles.title}>Créer un compte</Text>
           <Text style={styles.subtitle}>
-            Rejoignez TontinesApp
+            Rejoignez TontApp
           </Text>
         </View>
 

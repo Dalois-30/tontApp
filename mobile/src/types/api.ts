@@ -61,7 +61,7 @@ export type TontineStatus =
   | 'Cancelled';
 
 /** Payment status for a member in a tour */
-export type StatutPaiement = 'paye' | 'en_attente' | 'en_retard' | 'adhesion_en_attente';
+export type StatutPaiement = 'paye' | 'en_attente' | 'a_payer' | 'en_retard' | 'adhesion_en_attente';
 
 /** Tontine detail */
 export interface TontineDetail extends TontineSummary {

@@ -52,3 +52,14 @@ export function timeRemaining(targetDate: string | Date): {
 
   return { hours, minutes, seconds, totalSeconds, isExpired: false };
 }
+
+const STATUTS: Record<string, string> = {
+  Draft: 'Brouillon', Active: 'Active', Suspended: 'Suspendue', Completed: 'Terminée', Cancelled: 'Annulée',
+  Brouillon: 'Brouillon', Ouvert: 'Ouvert', Clos: 'Clos', Annule: 'Annulé',
+};
+/** French label of a tontine/project status coming from the API. */
+export const libelleStatut = (s: string): string => STATUTS[s] ?? s;
+
+const PERIODICITES: Record<string, string> = { Monthly: 'Mensuelle', Biweekly: 'Bimensuelle', Weekly: 'Hebdomadaire' };
+/** French label of a periodicity coming from the API. */
+export const libellePeriodicite = (p: string): string => PERIODICITES[p] ?? p;
