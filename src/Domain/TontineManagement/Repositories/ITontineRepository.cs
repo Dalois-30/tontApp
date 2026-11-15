@@ -25,6 +25,9 @@ public interface ITontineRepository
     /// </summary>
     Task<int> CountByGestionnaireAsync(string gestionnaireId, CancellationToken cancellationToken = default);
 
+    /// <summary>Account linked to a tontine member, or null (member without account / unknown).</summary>
+    Task<UtilisateurId?> GetUtilisateurIdOfMembreAsync(MemberId membreId, CancellationToken cancellationToken = default);
+
     Task AddAsync(Tontine tontine, CancellationToken cancellationToken = default);
     Task UpdateAsync(Tontine tontine, CancellationToken cancellationToken = default);
 }

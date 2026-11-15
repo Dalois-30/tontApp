@@ -154,7 +154,8 @@ public sealed class DashboardReadService : IDashboardReadService
         if (tontine is null)
             return 0;
 
-        var message = $"Rappel {tontine.Name} : votre cotisation de {tontine.ContributionAmount} est attendue. Merci de la remettre au gestionnaire.";
+        var montant = tontine.ContributionAmount.Amount.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("fr-FR"));
+        var message = $"Rappel {tontine.Name} : votre cotisation de {montant} {tontine.ContributionAmount.Currency} est attendue. Merci de la remettre au gestionnaire.";
         var count = 0;
         foreach (var membre in tontine.Members.Where(m => membreIds.Contains(m.Id.Value)))
         {

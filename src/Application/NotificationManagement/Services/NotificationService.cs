@@ -1,6 +1,10 @@
 namespace Application.NotificationManagement.Services;
 
 using Domain.Common;
+using Domain.IdentityManagement.Repositories;
+using Domain.IdentityManagement.ValueObjects;
+using Domain.TontineManagement.Repositories;
+using Domain.TontineManagement.ValueObjects;
 using Domain.NotificationManagement;
 using Domain.NotificationManagement.Repositories;
 using Domain.NotificationManagement.ValueObjects;
@@ -15,6 +19,9 @@ public interface INotificationService
 {
     /// <summary>
     /// Creates a notification and adds it to the outbox for async processing.
+    /// <paramref name="destinataireId"/> may be a phone number (E.164), a UtilisateurId or a MemberId:
+    /// ids are resolved to the account's phone. Returns false (without throwing) when no phone can be
+    /// found (member without account), the user opted out of non-critical SMS, or the rate limit is hit.
     /// </summary>
     Task<bool> PlanifierNotificationAsync(
         string destinataireId,
@@ -30,12 +37,18 @@ public sealed class NotificationService : INotificationService
     private readonly INotificationRepository _notificationRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<NotificationService> _logger;
+    private readonly IUtilisateurRepository _utilisateurs;
+    private readonly ITontineRepository _tontines;
 
     public NotificationService(
         INotificationRepository notificationRepository,
         IUnitOfWork unitOfWork,
-        ILogger<NotificationService> logger)
+        ILogger<NotificationService> logger,
+        IUtilisateurRepository utilisateurs,
+        ITontineRepository tontines)
     {
+        _utilisateurs = utilisateurs;
+        _tontines = tontines;
         _notificationRepository = notificationRepository;
         _unitOfWork = unitOfWork;
         _logger = logger;
@@ -47,6 +60,14 @@ public sealed class NotificationService : INotificationService
         string contenu,
         CancellationToken cancellationToken = default)
     {
+        var (telephone, optOut) = await ResoudreDestinataireAsync(destinataireId, cancellationToken);
+        if (telephone is null)
+        {
+            _logger.LogInformation("No phone number for recipient {DestinataireId}: notification {Type} skipped.", destinataireId, type);
+            return false;
+        }
+        destinataireId = telephone;
+
         // Critical notifications (payment confirmations) bypass rate limits
         var notification = Notification.CreateFull(
             destinataireId,
@@ -56,6 +77,12 @@ public sealed class NotificationService : INotificationService
 
         if (!notification.EstCritique())
         {
+            if (optOut)
+            {
+                _logger.LogInformation("Recipient {DestinataireId} opted out of SMS: notification {Type} skipped.", destinataireId, type);
+                return false;
+            }
+
             // Rate limit: max 10 SMS/member/day (non-critical only)
             var countToday = await _notificationRepository.CountTodayByDestinataireAsync(
                 destinataireId, cancellationToken);
@@ -77,5 +104,22 @@ public sealed class NotificationService : INotificationService
             notification.Id, destinataireId, type);
 
         return true;
+    }
+
+    /// <summary>Phone number (E.164) and SMS opt-out flag of the recipient.</summary>
+    private async Task<(string? Telephone, bool OptOut)> ResoudreDestinataireAsync(string destinataireId, CancellationToken ct)
+    {
+        if (!Guid.TryParse(destinataireId, out var id))
+            return (destinataireId, false); // already a phone number
+
+        var utilisateur = await _utilisateurs.GetByIdAsync(UtilisateurId.From(id), ct);
+        if (utilisateur is null)
+        {
+            var compte = await _tontines.GetUtilisateurIdOfMembreAsync(MemberId.From(id), ct);
+            if (compte is not null)
+                utilisateur = await _utilisateurs.GetByIdAsync(compte, ct);
+        }
+
+        return utilisateur is null ? (null, false) : (utilisateur.Telephone.Value, utilisateur.SmsOptOut);
     }
 }

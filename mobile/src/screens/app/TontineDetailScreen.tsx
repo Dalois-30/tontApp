@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../../navigation/types';
 import type { TontineMember } from '../../types/api';
@@ -55,6 +56,12 @@ export function TontineDetailScreen({
     staleTime: QUERY_STALE_TIME_MS,
     gcTime: QUERY_CACHE_TIME_MS,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
 
   const isGestionnaire = tontine?.gestionnaireId === userId;
 

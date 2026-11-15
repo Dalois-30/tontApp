@@ -14,6 +14,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../../navigation/types';
 import type { TontineSummary } from '../../types/api';
@@ -43,6 +44,13 @@ export function HomeScreen({ navigation }: Props): React.JSX.Element {
     staleTime: QUERY_STALE_TIME_MS,
     gcTime: QUERY_CACHE_TIME_MS,
   });
+
+  // Refresh when coming back to the list (after joining, creating or activating a tontine).
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
 
   // Request push notification permission on first mount
   useEffect(() => {
