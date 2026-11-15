@@ -34,6 +34,9 @@ public sealed record ProjetDetailsDto(
     IReadOnlyList<ParticipantDto> Participants, IReadOnlyList<PaiementProjetDto> Paiements, IReadOnlyList<DepenseDto> Depenses,
     IReadOnlyList<JournalDto>? Journal);
 
+public sealed record ProjetApercuDto(string Nom, string? Description, decimal Objectif, IReadOnlyList<decimal> Paliers,
+    string Periodicite, DateTime DateDebut, int NombreEcheances, int Participants);
+
 public sealed class ProjetIntrouvableException(string message = "Project not found.") : Exception(message);
 public sealed class AccesProjetRefuseException(string message = "You do not have access to this project.") : Exception(message);
 
@@ -182,6 +185,16 @@ public sealed class ProjetService
         var code = p.GenererCodeInvitation(jours, userId.ToString());
         await _uow.SaveChangesAsync(ct);
         return (code, p.CodeInvitationExpireLe!.Value);
+    }
+
+    /// <summary>What a person sees before joining with a code: the project and the tiers to choose from.</summary>
+    public async Task<ProjetApercuDto> ApercuAsync(string code, CancellationToken ct)
+    {
+        var hash = Domain.TontineManagement.ValueObjects.InvitationCode.ComputeHash(code.Trim().ToUpperInvariant());
+        var p = await _projets.GetByCodeHashAsync(hash, ct);
+        if (p is null || !p.CodeCorrespond(code)) throw new InvalidOperationException("Invalid or expired invitation code.");
+        return new ProjetApercuDto(p.Nom, p.Description, p.Objectif, p.Paliers, p.Periodicite.ToString(), p.DateDebut,
+            p.NombreEcheances, p.Participants.Count);
     }
 
     public async Task<ProjetDetailsDto> RejoindreAsync(string code, string nom, decimal palier, Guid userId, CancellationToken ct)

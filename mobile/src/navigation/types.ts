@@ -21,4 +21,6 @@ export type AppStackParamList = {
   Invitation: { tontineId: string; tontineNom: string; montant: number };
   HistoriqueVersements: { tontineId?: string } | undefined;
   Notifications: undefined;
+  ProjetDetail: { projetId: string };
+  RejoindreProjet: undefined;
 };

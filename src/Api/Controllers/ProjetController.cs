@@ -58,6 +58,10 @@ public class ProjetController : ControllerBase
         Run(() => _service.GenererCodeAsync(id, UserId, Admin, expirationJours, ct),
             r => Ok(new { code = r.Code, expiration = r.ExpireLe }));
 
+    /// <summary>Preview of the project behind an invitation code (name, tiers, schedule).</summary>
+    [HttpGet("apercu")]
+    public Task<IActionResult> Apercu([FromQuery] string code, CancellationToken ct) => Run(() => _service.ApercuAsync(code ?? "", ct));
+
     [HttpPost("rejoindre")]
     public Task<IActionResult> Rejoindre([FromBody] RejoindreProjetRequest r, CancellationToken ct) =>
         Run(() => _service.RejoindreAsync(r.Code, r.Nom, r.Palier, UserId, ct));
