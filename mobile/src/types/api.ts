@@ -61,7 +61,7 @@ export type TontineStatus =
   | 'Cancelled';
 
 /** Payment status for a member in a tour */
-export type StatutPaiement = 'paye' | 'en_attente' | 'en_retard';
+export type StatutPaiement = 'paye' | 'en_attente' | 'en_retard' | 'adhesion_en_attente';
 
 /** Tontine detail */
 export interface TontineDetail extends TontineSummary {
@@ -77,6 +77,9 @@ export interface TontineMember {
   dateAdhesion: string;
   /** Payment status in current tour */
   statutPaiement?: StatutPaiement;
+  /** Contributions owed for earlier rounds (FCFA), including a late member's catch-up */
+  resteDu?: number;
+  toursImpayes?: number[];
 }
 
 export interface TourInfo {

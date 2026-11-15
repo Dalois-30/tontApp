@@ -4,6 +4,7 @@ using Application.TontineManagement.Commands.ActivateTontine;
 using Application.TontineManagement.Commands.AddMember;
 using Application.TontineManagement.Commands.CloturerTour;
 using Application.TontineManagement.Commands.CreateTontine;
+using Application.TontineManagement.Commands.DeciderAdhesion;
 using Application.TontineManagement.Commands.EnvoyerMessage;
 using Application.TontineManagement.Commands.GenererCodeInvitation;
 using Application.TontineManagement.Services;
@@ -309,8 +310,10 @@ public class TontineController : ControllerBase
                 return Unauthorized(new { error = "User identity could not be determined." });
 
             var command = new RejoindreParCodeCommand(request.Code, request.MemberName, utilisateurId);
-            await _mediator.Send(command, cancellationToken);
-            return NoContent();
+            var statut = await _mediator.Send(command, cancellationToken);
+            // "actif": member right away (draft tontine). "en_attente": the tontine has started,
+            // the gestionnaire must approve the request.
+            return Ok(new { statut });
         }
         catch (InvalidOperationException ex)
         {
@@ -453,6 +456,18 @@ public class TontineController : ControllerBase
     [HttpGet("{id:guid}/export/pdf")]
     [ProducesResponseType(200)]
     [ProducesResponseType(404)]
+    // ── POST /api/v1/tontines/{id}/membres/{membreId}/accepter|refuser ─
+    /// <summary>Approve or refuse a membership request made while the tontine was active.</summary>
+    [HttpPost("{id:guid}/membres/{membreId:guid}/{decision:regex(^(accepter|refuser)$)}")]
+    [TontineAccess(NiveauAcces.Gestionnaire)]
+    public async Task<IActionResult> DeciderAdhesion(Guid id, Guid membreId, string decision, CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(new DeciderAdhesionCommand(id, membreId, decision == "accepter"), cancellationToken);
+        if (!result.IsSuccess)
+            return result.Error!.Contains("not found") ? NotFound(new { error = result.Error }) : BadRequest(new { error = result.Error });
+        return Ok(new { statut = decision == "accepter" ? "actif" : "refuse" });
+    }
+
     // ── GET /api/v1/tontines/{id}/details ──────────────────────────
     /// <summary>Tontine with members (and their status in the current round) and rounds.</summary>
     [HttpGet("{id:guid}/details")]

@@ -33,6 +33,11 @@ const STATUS_CONFIG: Record<
     backgroundColor: '#B71C1C',     // dark red – contrast 7.8:1 on white
     textColor: '#FFFFFF',
   },
+  adhesion_en_attente: {
+    label: 'À valider',
+    backgroundColor: '#1F4E79',     // dark blue – contrast 8.6:1 on white
+    textColor: '#FFFFFF',
+  },
 };
 
 export function MembreStatusBadge({

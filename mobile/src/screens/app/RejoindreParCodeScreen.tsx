@@ -58,14 +58,17 @@ export function RejoindreParCodeScreen({
     setError(null);
 
     try {
-      await tontineService.rejoindreParCode({
+      const statut = await tontineService.rejoindreParCode({
         code: trimmedCode,
         memberName: trimmedName,
       });
 
       Alert.alert(
-        'Bienvenue ! 🎉',
-        'Vous avez rejoint la tontine avec succès.',
+        statut === 'actif' ? 'Bienvenue ! 🎉' : 'Demande envoyée',
+        statut === 'actif'
+          ? 'Vous avez rejoint la tontine avec succès.'
+          : 'La tontine a déjà démarré : le gestionnaire doit valider votre adhésion. ' +
+            'Vous passerez en dernier dans l\'ordre des bénéficiaires et devrez les cotisations des tours déjà ouverts.',
         [
           {
             text: 'OK',
@@ -137,9 +140,9 @@ export function RejoindreParCodeScreen({
         <View style={styles.infoCard}>
           <Text style={styles.infoIcon}>ℹ️</Text>
           <Text style={styles.infoText}>
-            Vous ne pouvez rejoindre une tontine que si elle est encore en phase
-            de recrutement (brouillon). Une fois activée, il n'est plus possible
-            d'ajouter des membres.
+            Si la tontine a déjà démarré, votre adhésion doit être validée par
+            le gestionnaire. Vous passerez alors en dernier dans l'ordre des
+            bénéficiaires et devrez rattraper les cotisations des tours déjà ouverts.
           </Text>
         </View>
 

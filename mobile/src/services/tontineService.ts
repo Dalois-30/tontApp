@@ -73,6 +73,8 @@ interface BackendTontineDetailsDto {
     statut: string; // paye | en_attente | a_payer | en_retard | beneficiaire | suspendu
     utilisateurId: string | null;
     rang: number;
+    resteDu: number;
+    toursImpayes: number[];
   }[];
   tours: {
     id: string;
@@ -92,12 +94,15 @@ function mapStatutPaiement(statut: string): StatutPaiement | undefined {
   if (statut === 'paye') return 'paye';
   if (statut === 'en_retard') return 'en_retard';
   if (statut === 'en_attente' || statut === 'a_payer') return 'en_attente';
+  if (statut === 'adhesion_en_attente') return 'adhesion_en_attente';
   return undefined; // beneficiaire, suspendu
 }
 
 function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
   const tour = dto.tours.find((t) => t.status === 'Ouvert');
-  const payeurs = dto.membres.filter((m) => m.statut !== 'beneficiaire' && m.statut !== 'suspendu');
+  const payeurs = dto.membres.filter(
+    (m) => m.statut !== 'beneficiaire' && m.statut !== 'suspendu' && m.statut !== 'adhesion_en_attente',
+  );
   return {
     id: dto.id,
     nom: dto.nom,
@@ -106,7 +111,7 @@ function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
     montantCotisation: dto.montantCotisation,
     devise: dto.devise,
     frequence: dto.periodicite,
-    nombreMembres: dto.membres.length,
+    nombreMembres: dto.membres.filter((m) => m.statut !== 'adhesion_en_attente').length,
     dateCreation: dto.createdAt,
     gestionnaireId: dto.gestionnaireId,
     gestionnaireName: dto.gestionnaireNom ?? '',
@@ -116,6 +121,8 @@ function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
       telephone: m.telephone ?? '',
       dateAdhesion: '',
       statutPaiement: mapStatutPaiement(m.statut),
+      resteDu: m.resteDu,
+      toursImpayes: m.toursImpayes,
     })),
     tourActuel: tour
       ? {
@@ -219,8 +226,14 @@ export const tontineService = {
    * POST /tontines/rejoindre
    * Join a tontine using an invitation code.
    */
-  async rejoindreParCode(data: RejoindreParCodeRequest): Promise<void> {
-    await apiClient.post('/tontines/rejoindre', data);
+  /** Returns 'actif' (draft tontine) or 'en_attente' (started tontine: the gestionnaire must approve). */
+  async rejoindreParCode(data: RejoindreParCodeRequest): Promise<'actif' | 'en_attente'> {
+    const response = await apiClient.post<{ statut: 'actif' | 'en_attente' }>('/tontines/rejoindre', data);
+    return response.data.statut;
+  },
+
+  async deciderAdhesion(tontineId: string, membreId: string, accepter: boolean): Promise<void> {
+    await apiClient.post(`/tontines/${tontineId}/membres/${membreId}/${accepter ? 'accepter' : 'refuser'}`);
   },
 
   /**

@@ -54,16 +54,88 @@ public class TontineEnhancedTests
         Assert.IsType<InvitationGeneratedEvent>(domainEvent);
     }
 
-    [Fact]
-    public void GenerateInvitation_WhenActive_ThrowsInvalidOperationException()
+    // ── Adhésion à une tontine déjà démarrée ────────────────────────
+
+    private static Tontine CreateActivatedTontine()
     {
         var tontine = CreateDefaultTontine();
         tontine.AddMember("Alice");
         tontine.AddMember("Bob");
         tontine.AddMember("Charlie");
-        tontine.Start();
+        tontine.Activate();
+        return tontine;
+    }
 
+    [Fact]
+    public void GenerateInvitation_WhenActive_Succeeds()
+    {
+        var tontine = CreateActivatedTontine();
+        var (_, code) = tontine.GenerateInvitation();
+        Assert.False(string.IsNullOrEmpty(code));
+    }
+
+    [Fact]
+    public void GenerateInvitation_WhenCancelled_Throws()
+    {
+        var tontine = CreateActivatedTontine();
+        tontine.Cancel();
         Assert.Throws<InvalidOperationException>(() => tontine.GenerateInvitation());
+    }
+
+    [Fact]
+    public void JoinWithInvitation_WhenActive_CreatesPendingMemberOutsideRotation()
+    {
+        var tontine = CreateActivatedTontine();
+        var (_, code) = tontine.GenerateInvitation();
+
+        var dan = tontine.JoinWithInvitation("Dan", code, Domain.IdentityManagement.ValueObjects.UtilisateurId.Create());
+
+        Assert.Equal(StatutMembre.EnAttente, dan.Statut);
+        Assert.DoesNotContain(dan, tontine.GetActiveMembers());
+    }
+
+    [Fact]
+    public void AccepterAdhesion_PlacesMemberLastAndExtendsTheCycle()
+    {
+        var tontine = CreateActivatedTontine();
+        var (_, code) = tontine.GenerateInvitation();
+        var dan = tontine.JoinWithInvitation("Dan", code, Domain.IdentityManagement.ValueObjects.UtilisateurId.Create());
+
+        tontine.AccepterAdhesion(dan.Id);
+
+        Assert.Equal(StatutMembre.Actif, dan.Statut);
+        Assert.Equal(4, dan.Rang);
+        // Rounds 2 and 3 go to Bob and Charlie, round 4 to Dan, then the cycle completes.
+        for (var i = 0; i < 3; i++)
+            tontine.CloseRound(tontine.GetActiveRounds().Single().Id);
+        Assert.Equal(dan.Id, tontine.Rounds.OrderBy(r => r.RoundNumber).Last().BeneficiaryId);
+        tontine.CloseRound(tontine.GetActiveRounds().Single().Id);
+        Assert.Equal(TontineStatus.Completed, tontine.Status);
+    }
+
+    [Fact]
+    public void ToursDusPar_LateMemberOwesRoundsAlreadyOpened()
+    {
+        var tontine = CreateActivatedTontine();
+        tontine.CloseRound(tontine.GetActiveRounds().Single().Id); // round 2 opens
+        var (_, code) = tontine.GenerateInvitation();
+        var dan = tontine.JoinWithInvitation("Dan", code, Domain.IdentityManagement.ValueObjects.UtilisateurId.Create());
+        tontine.AccepterAdhesion(dan.Id);
+
+        Assert.Equal(new[] { 1, 2 }, tontine.ToursDusPar(dan.Id).Select(r => r.RoundNumber));
+    }
+
+    [Fact]
+    public void RefuserAdhesion_RemovesThePendingRequest()
+    {
+        var tontine = CreateActivatedTontine();
+        var (_, code) = tontine.GenerateInvitation();
+        var dan = tontine.JoinWithInvitation("Dan", code, Domain.IdentityManagement.ValueObjects.UtilisateurId.Create());
+
+        tontine.RefuserAdhesion(dan.Id);
+
+        Assert.DoesNotContain(tontine.Members, m => m.Id == dan.Id);
+        Assert.Throws<InvalidOperationException>(() => tontine.RefuserAdhesion(tontine.Members.First().Id));
     }
 
     [Fact]

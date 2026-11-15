@@ -15,8 +15,13 @@ public sealed record PageResult<T>(IReadOnlyList<T> Items, int TotalCount, int P
     }
 }
 
-/// <summary>Member as seen in the current round. Statut: paye | en_attente | a_payer | en_retard | beneficiaire | suspendu.</summary>
-public sealed record DashMembreDto(Guid Id, string Nom, string? Telephone, string Statut, Guid? UtilisateurId, int Rang);
+/// <summary>
+/// Member as seen in the current round. Statut: paye | en_attente | a_payer | en_retard | beneficiaire |
+/// suspendu | adhesion_en_attente. ResteDu: contributions owed for earlier rounds (arrears, including the
+/// rounds opened before a late member joined); ToursImpayes lists those round numbers.
+/// </summary>
+public sealed record DashMembreDto(Guid Id, string Nom, string? Telephone, string Statut, Guid? UtilisateurId, int Rang,
+    decimal ResteDu, IReadOnlyList<int> ToursImpayes);
 
 public sealed record DashTourDto(Guid Id, int Numero, DashMembreDto? Beneficiaire, string Status, DateTime DateOuverture, DateTime? DateCloture, DateTime DateLimite);
 

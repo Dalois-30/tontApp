@@ -12,6 +12,7 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  Pressable,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect } from '@react-navigation/native';
@@ -132,19 +133,62 @@ export function TontineDetailScreen({
     navigation.navigate('HistoriqueVersements', { tontineId });
   }, [navigation, tontineId]);
 
+  const handleDemande = useCallback(
+    (member: TontineMember) => {
+      const decider = async (accepter: boolean) => {
+        try {
+          await tontineService.deciderAdhesion(tontineId, member.id, accepter);
+          await refetch();
+        } catch (e) {
+          const msg =
+            (e as { response?: { data?: { error?: string } } }).response?.data?.error ??
+            (e as Error).message;
+          Alert.alert('Action impossible', msg);
+        }
+      };
+      Alert.alert(
+        "Demande d'adhésion",
+        `${member.nom} souhaite rejoindre la tontine en cours. Accepté, il passera en dernier ` +
+          'dans l\'ordre des bénéficiaires et devra les cotisations des tours déjà ouverts.',
+        [
+          { text: 'Plus tard', style: 'cancel' },
+          { text: 'Refuser', style: 'destructive', onPress: () => void decider(false) },
+          { text: 'Accepter', onPress: () => void decider(true) },
+        ],
+      );
+    },
+    [tontineId, refetch],
+  );
+
   const renderMember = useCallback(
-    (member: TontineMember) => (
-      <View key={member.id} style={styles.memberRow}>
-        <View style={styles.memberInfo}>
-          <Text style={styles.memberName}>{member.nom}</Text>
-          <Text style={styles.memberPhone}>{member.telephone}</Text>
+    (member: TontineMember) => {
+      const demande = member.statutPaiement === 'adhesion_en_attente';
+      const row = (
+        <View style={styles.memberRow}>
+          <View style={styles.memberInfo}>
+            <Text style={styles.memberName}>{member.nom}</Text>
+            <Text style={styles.memberPhone}>{member.telephone}</Text>
+            {member.resteDu ? (
+              <Text style={styles.memberDue}>
+                Reste dû : {formatMontant(member.resteDu)} (tours {member.toursImpayes?.join(', ')})
+              </Text>
+            ) : null}
+          </View>
+          {member.statutPaiement ? (
+            <MembreStatusBadge statut={member.statutPaiement} />
+          ) : null}
         </View>
-        {member.statutPaiement ? (
-          <MembreStatusBadge statut={member.statutPaiement} />
-        ) : null}
-      </View>
-    ),
-    [],
+      );
+      return demande && isGestionnaire ? (
+        <Pressable key={member.id} onPress={() => handleDemande(member)} accessibilityRole="button"
+          accessibilityLabel={`Demande d'adhésion de ${member.nom}`}>
+          {row}
+        </Pressable>
+      ) : (
+        <View key={member.id}>{row}</View>
+      );
+    },
+    [isGestionnaire, handleDemande],
   );
 
   if (isLoading) {
@@ -253,19 +297,21 @@ export function TontineDetailScreen({
         {tontine.membres?.map(renderMember)}
       </View>
 
-      {isGestionnaire && tontine.status === 'Draft' ? (
+      {isGestionnaire && (tontine.status === 'Draft' || tontine.status === 'Active') ? (
         <>
           <PrimaryButton
             title="📨 Inviter des membres"
             onPress={handleNavigateInvitation}
             style={styles.actionButton}
           />
+          {tontine.status === 'Draft' ? (
           <PrimaryButton
             title="🚀 Activer la tontine"
             onPress={handleActiver}
             disabled={activating}
             style={styles.gestionnaireButton}
           />
+          ) : null}
         </>
       ) : null}
 
@@ -339,6 +385,11 @@ const styles = StyleSheet.create({
   gestionnaireButton: {
     marginTop: spacing.sm,
     backgroundColor: colors.secondary,
+  },
+  memberDue: {
+    fontSize: fontSizes.sm,
+    color: '#8A4B00',
+    marginTop: 2,
   },
   memberRow: {
     flexDirection: 'row',

@@ -117,4 +117,28 @@ public class DashboardReadServiceTests
         _notif.Verify(n => n.PlanifierNotificationAsync(Membre("Dan").ToString(), NotificationType.RappelPaiement,
             It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task LateMember_PendingThenOwesEarlierRounds()
+    {
+        // Round 1 (Alice beneficiary) is closed, round 2 is open (Bob beneficiary).
+        Versement("Bob", confirmer: true); // Bob paid round 1
+        _tontine.CloseRound(_tontine.Rounds.First().Id);
+        var (_, code) = _tontine.GenerateInvitation();
+        var eve = _tontine.JoinWithInvitation("Eve", code, UtilisateurId.Create());
+
+        var pending = await Service().GetTontineAsync(_tontine.Id.Value);
+        pending!.Membres.Single(m => m.Nom == "Eve").Statut.Should().Be("adhesion_en_attente");
+
+        _tontine.AccepterAdhesion(eve.Id);
+        var dto = await Service().GetTontineAsync(_tontine.Id.Value);
+
+        var eveDto = dto!.Membres.Single(m => m.Nom == "Eve");
+        eveDto.Rang.Should().Be(5);
+        eveDto.ToursImpayes.Should().Equal(1);         // arrears: round 1, opened before she joined
+        eveDto.ResteDu.Should().Be(5000);
+        dto.Membres.Single(m => m.Nom == "Bob").ResteDu.Should().Be(0);      // paid round 1
+        dto.Membres.Single(m => m.Nom == "Carol").ToursImpayes.Should().Equal(1);
+        dto.Membres.Single(m => m.Nom == "Alice").ResteDu.Should().Be(0);    // round 1 beneficiary
+    }
 }

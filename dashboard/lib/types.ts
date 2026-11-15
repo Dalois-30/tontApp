@@ -19,6 +19,10 @@ export interface MembreDto {
   telephone?: string;
   statut: string;
   utilisateurId?: string;
+  rang?: number;
+  /** Arrears for earlier rounds (FCFA) */
+  resteDu?: number;
+  toursImpayes?: number[];
 }
 
 export interface TourDto {
