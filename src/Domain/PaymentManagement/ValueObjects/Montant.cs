@@ -30,6 +30,21 @@ public sealed class Montant : ValueObject
         return new Montant(valeur, devise);
     }
 
+    /// <summary>
+    /// Amount of a payment declared by hand (cash, complement of a partial payment): any positive amount,
+    /// so that a small remainder (≤ 100 FCFA) can still be settled. The 100 FCFA minimum stays for Mobile Money.
+    /// </summary>
+    public static Montant CreateDeclare(decimal valeur, string devise = Domain.Common.Devises.ParDefaut)
+    {
+        if (valeur <= 0)
+            throw new ArgumentException("Le montant doit être supérieur à 0.", nameof(valeur));
+
+        if (string.IsNullOrWhiteSpace(devise))
+            throw new ArgumentException("La devise ne peut pas être vide.", nameof(devise));
+
+        return new Montant(valeur, devise);
+    }
+
     protected override IEnumerable<object?> GetEqualityComponents()
     {
         yield return Valeur;

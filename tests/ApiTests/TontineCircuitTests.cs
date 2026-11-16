@@ -226,6 +226,162 @@ public sealed class TontineCircuitTests(ApiFactory api)
         (await t.Chloe.Lire($"/api/v1/tontines/{t.Id}/chronologie?q=bruno")).AsArray().Should().HaveCountGreaterThanOrEqualTo(2);
     }
 
+    // ── Partial payments: validated, visible as partial, the rest stays due ──
+
+    private static Task<HttpResponseMessage> DeclarerMontant(Acteur qui, Groupe t, decimal montant, Guid? tourId = null) =>
+        qui.Post("/api/v1/versements/manuel", new { tontineId = t.Id, tourId = tourId ?? t.TourId, montant, moyen = "Espèces", reference = "REF-P" });
+
+    private static async Task<Guid> DeclarerMontantOk(Acteur qui, Groupe t, decimal montant, Guid? tourId = null)
+    {
+        var r = await DeclarerMontant(qui, t, montant, tourId);
+        var corps = await r.Content.ReadAsStringAsync();
+        r.StatusCode.Should().Be(HttpStatusCode.Created, corps);
+        return (Guid)JsonNode.Parse(corps)!["versementId"]!;
+    }
+
+    private static async Task<JsonNode> Membre(Acteur lecteur, Groupe t, Guid membreId) =>
+        (await lecteur.Lire($"/api/v1/tontines/{t.Id}/details"))["membres"]!.AsArray()
+            .First(m => (Guid)m!["id"]! == membreId)!;
+
+    [Fact]
+    public async Task PartielValide_PayePartiellement_AvecLeReste_SurMobileEtWeb()
+    {
+        var t = await TontineAsync();
+        var v = await DeclarerMontantOk(t.Bruno, t, 2000m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/valider");
+
+        var bruno = await Membre(t.Chloe, t, t.MembreBruno);
+        ((string)bruno["statut"]!).Should().Be("paye_partiel");
+        ((decimal)bruno["resteTour"]!).Should().Be(3000m);
+        ((decimal)bruno["enAttenteTour"]!).Should().Be(0m);
+
+        var tableau = await t.Gestionnaire.Lire($"/api/v1/dashboard/gestionnaire/tontine?tontineId={t.Id}");
+        var web = tableau["membres"]!.AsArray().First(m => (Guid)m!["id"]! == t.MembreBruno)!;
+        ((string)web["statut"]!).Should().Be("paye_partiel");
+        ((decimal)web["resteTour"]!).Should().Be(3000m);
+    }
+
+    [Fact]
+    public async Task Complement_AccepteSansDoublon_PuisValide_PasseAPaye_AvecLesDeuxVersements()
+    {
+        var t = await TontineAsync();
+        var v1 = await DeclarerMontantOk(t.Bruno, t, 2000m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v1}/valider");
+
+        var v2 = await DeclarerMontantOk(t.Bruno, t, 3000m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v2}/valider");
+
+        var bruno = await Membre(t.Chloe, t, t.MembreBruno);
+        ((string)bruno["statut"]!).Should().Be("paye");
+        ((decimal)bruno["resteTour"]!).Should().Be(0m);
+
+        var siens = (await t.Chloe.Lire($"/api/v1/tontines/{t.Id}/versements"))["items"]!.AsArray()
+            .Where(x => (Guid)x!["payeurId"]! == t.MembreBruno).ToList();
+        siens.Select(x => (Guid)x!["id"]!).Should().BeEquivalentTo([v1, v2]);
+        siens.Should().OnlyContain(x => (string)x!["status"]! == "confirme");
+    }
+
+    [Fact]
+    public async Task PartielPlusAttente_PayePartiel_AValider_EtNouvelleDeclarationRefusee()
+    {
+        var t = await TontineAsync();
+        var v = await DeclarerMontantOk(t.Bruno, t, 2000m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/valider");
+        await DeclarerMontantOk(t.Bruno, t, 3000m);
+
+        var bruno = await Membre(t.Chloe, t, t.MembreBruno);
+        ((string)bruno["statut"]!).Should().Be("paye_partiel");
+        ((decimal)bruno["enAttenteTour"]!).Should().Be(3000m);
+        ((decimal)bruno["resteTour"]!).Should().Be(0m);
+
+        var r = await DeclarerMontant(t.Bruno, t, 500m);
+        r.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await r.Content.ReadAsStringAsync()).Should().Contain("couverte").And.Contain("Bruno Mbarga");
+    }
+
+    [Fact]
+    public async Task Complet_Paye_EtToutNouveauVersementRefuse()
+    {
+        var t = await TontineAsync();
+        var v = await DeclarerOk(t.Bruno, t);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/valider");
+
+        var bruno = await Membre(t.Chloe, t, t.MembreBruno);
+        ((string)bruno["statut"]!).Should().Be("paye");
+        ((decimal)bruno["resteTour"]!).Should().Be(0m);
+
+        var r = await DeclarerMontant(t.Bruno, t, 1000m);
+        r.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await r.Content.ReadAsStringAsync()).Should().Contain("entièrement payée");
+    }
+
+    [Fact]
+    public async Task ArrierePartiel_ResteDansLesImpayes_EtLeResteSePaie()
+    {
+        var t = await TontineAsync();
+        var v = await DeclarerMontantOk(t.Bruno, t, 2000m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/valider");
+        (await t.Gestionnaire.Post($"/api/v1/tontines/{t.Id}/rounds/{t.TourId}/close")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var bruno = await Membre(t.Chloe, t, t.MembreBruno);
+        bruno["toursImpayes"]!.AsArray().Select(x => (int)x!).Should().Contain(1);
+        ((decimal)bruno["resteDu"]!).Should().Be(3000m);
+
+        // The rest of round 1 can still be declared (catch-up), then the arrears are cleared.
+        var v2 = await DeclarerMontantOk(t.Bruno, t, 3000m, t.TourId);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v2}/valider");
+        bruno = await Membre(t.Chloe, t, t.MembreBruno);
+        ((decimal)bruno["resteDu"]!).Should().Be(0m);
+        bruno["toursImpayes"]!.AsArray().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AttentePartielle_EnAttente_AvecLeReste_EtLeResteSeDeclare()
+    {
+        var t = await TontineAsync();
+        await DeclarerMontantOk(t.Bruno, t, 2000m);
+
+        var bruno = await Membre(t.Chloe, t, t.MembreBruno);
+        ((string)bruno["statut"]!).Should().Be("en_attente");
+        ((decimal)bruno["enAttenteTour"]!).Should().Be(2000m);
+        ((decimal)bruno["resteTour"]!).Should().Be(3000m);
+
+        await DeclarerMontantOk(t.Bruno, t, 3000m);
+        ((decimal)(await Membre(t.Chloe, t, t.MembreBruno))["resteTour"]!).Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task PetitReste_50Fcfa_ApresPartielValide_SeDeclareEtSeValide()
+    {
+        var t = await TontineAsync();
+        var v1 = await DeclarerMontantOk(t.Bruno, t, 4950m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v1}/valider");
+        ((decimal)(await Membre(t.Chloe, t, t.MembreBruno))["resteTour"]!).Should().Be(50m);
+
+        var v2 = await DeclarerMontantOk(t.Bruno, t, 50m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v2}/valider");
+
+        var bruno = await Membre(t.Chloe, t, t.MembreBruno);
+        ((string)bruno["statut"]!).Should().Be("paye");
+        ((decimal)bruno["resteTour"]!).Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task ComplementRejete_RevientAPayePartiel_AvecToutLeResteDu()
+    {
+        var t = await TontineAsync();
+        var v1 = await DeclarerMontantOk(t.Bruno, t, 2000m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v1}/valider");
+        var v2 = await DeclarerMontantOk(t.Bruno, t, 3000m);
+
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v2}/rejeter", new { raison = "Argent non reçu" });
+
+        var bruno = await Membre(t.Chloe, t, t.MembreBruno);
+        ((string)bruno["statut"]!).Should().Be("paye_partiel");
+        ((decimal)bruno["resteTour"]!).Should().Be(3000m);
+        ((decimal)bruno["enAttenteTour"]!).Should().Be(0m);
+    }
+
     // ── Web dashboard: the creator (responsable + trésorier) keeps the existing flow ──
 
     [Fact]

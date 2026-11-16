@@ -57,6 +57,25 @@ const STATUTS: Record<string, string> = {
   Draft: 'Brouillon', Active: 'Active', Suspended: 'Suspendue', Completed: 'Terminée', Cancelled: 'Annulée',
   Brouillon: 'Brouillon', Ouvert: 'Ouvert', Clos: 'Clos', Annule: 'Annulé',
 };
+/**
+ * Label of a member's open round when part of it is paid or pending; undefined otherwise (default label).
+ * A partly paid round is never shown as a plain "Payé":
+ * "Payé partiellement · reste 6 000 FCFA" (and/or "· 6 000 FCFA à valider");
+ * a pending payment smaller than the contribution: "4 000 FCFA à valider · reste 6 000 FCFA".
+ */
+export function libelleStatutTour(statut: string | undefined, reste?: number, aValider?: number): string | undefined {
+  const r = reste ?? 0;
+  const v = aValider ?? 0;
+  if (statut === 'paye_partiel') {
+    const parts = ['Payé partiellement'];
+    if (r > 0) parts.push(`reste ${formatMontant(r)}`);
+    if (v > 0) parts.push(`${formatMontant(v)} à valider`);
+    return parts.join(' · ');
+  }
+  if (statut === 'en_attente' && r > 0) return `${v > 0 ? `${formatMontant(v)} à valider` : 'À valider'} · reste ${formatMontant(r)}`;
+  return undefined;
+}
+
 /** French label of a tontine/project status coming from the API. */
 export const libelleStatut = (s: string): string => STATUTS[s] ?? s;
 

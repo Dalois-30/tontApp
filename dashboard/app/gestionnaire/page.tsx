@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { apiFetch } from "@/lib/api";
-import { formatMontant, formatDate, libellePeriodicite, libelleStatutGroupe } from "@/lib/format";
+import { formatMontant, formatDate, libellePeriodicite, libelleStatutGroupe, libelleStatutMembre, doitSurLeTour } from "@/lib/format";
 import type { MembreDto, TontineDto, VersementDto } from "@/lib/types";
 import { Badge, Card, EmptyState, Icon, PageHeader, SegmentedBar, Stat } from "@/components/ui";
 import RelancerButton from "@/components/RelancerButton";
@@ -17,7 +17,7 @@ async function charger(token: string) {
   return { tontine, versements: page.items ?? [] };
 }
 
-const ordreStatut: Record<string, number> = { en_retard: 0, a_payer: 1, en_attente: 2, paye: 3, beneficiaire: 4, suspendu: 5 };
+const ordreStatut: Record<string, number> = { en_retard: 0, a_payer: 1, paye_partiel: 2, en_attente: 3, paye: 4, beneficiaire: 5, suspendu: 6 };
 
 export default async function TableauDeBordTontine() {
   const token = (await cookies()).get("accessToken")?.value ?? "";
@@ -95,6 +95,7 @@ export default async function TableauDeBordTontine() {
           <div className="px-5 md:px-6 pb-5">
             <SegmentedBar total={payeurs.length} segments={[
               { key: "paye", label: "Payé", value: compte("paye"), className: "bg-good" },
+              { key: "paye_partiel", label: "Payé partiellement", value: compte("paye_partiel"), className: "bg-serious" },
               { key: "en_attente", label: "À valider", value: compte("en_attente"), className: "bg-warn-mark", textClass: "text-[#0b0b0b]" },
               { key: "a_payer", label: "À payer", value: compte("a_payer"), className: "bg-chart-2", textClass: "text-ink" },
               { key: "en_retard", label: "En retard", value: compte("en_retard"), className: "bg-bad" },
@@ -112,7 +113,7 @@ export default async function TableauDeBordTontine() {
                     {m.telephone && <p className="text-[12px] text-muted num">{m.telephone}</p>}
                   </td>
                   <td className="num text-ink-2">{m.rang}</td>
-                  <td><Badge status={m.statut} /></td>
+                  <td><Badge status={m.statut} label={libelleStatutMembre(m)} /></td>
                   <td className="text-right num">
                     {(m.resteDu ?? 0) > 0
                       ? <span className="text-bad font-medium" title={`Tours ${m.toursImpayes?.join(", ")}`}>{formatMontant(m.resteDu ?? 0)}</span>
@@ -120,7 +121,7 @@ export default async function TableauDeBordTontine() {
                     {(m.resteDu ?? 0) > 0 && <p className="text-[12px] text-muted">tours {m.toursImpayes?.join(", ")}</p>}
                   </td>
                   <td className="text-right">
-                    {(m.statut === "a_payer" || m.statut === "en_retard") && m.telephone
+                    {doitSurLeTour(m, tontine.montantCotisation) && m.telephone
                       ? <RelancerButton membreId={m.id} membreNom={m.nom} tontineId={tontine.id} />
                       : null}
                   </td>

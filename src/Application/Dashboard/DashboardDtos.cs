@@ -16,12 +16,18 @@ public sealed record PageResult<T>(IReadOnlyList<T> Items, int TotalCount, int P
 }
 
 /// <summary>
-/// Member as seen in the current round. Statut: paye | en_attente | a_payer | en_retard | beneficiaire |
+/// Member as seen in the current round. Statut: paye | paye_partiel | en_attente | a_payer | en_retard | beneficiaire |
 /// suspendu | adhesion_en_attente. ResteDu: contributions owed for earlier rounds (arrears, including the
 /// rounds opened before a late member joined); ToursImpayes lists those round numbers.
+/// Statut is computed on amounts: paye_partiel = some payment validated, but less than the contribution.
+/// A round is settled once validated + pending covers the contribution; a partly paid past round stays in
+/// ToursImpayes with its remainder (RestesImpayes, aligned with ToursImpayes).
+/// ResteTour: what is still to declare on the open round (contribution − validated − pending);
+/// EnAttenteTour: amount declared on the open round and waiting for validation.
 /// </summary>
 public sealed record DashMembreDto(Guid Id, string Nom, string? Telephone, string Statut, Guid? UtilisateurId, int Rang,
-    decimal ResteDu, IReadOnlyList<int> ToursImpayes);
+    decimal ResteDu, IReadOnlyList<int> ToursImpayes,
+    decimal ResteTour = 0, decimal EnAttenteTour = 0, IReadOnlyList<decimal>? RestesImpayes = null);
 
 public sealed record DashTourDto(Guid Id, int Numero, DashMembreDto? Beneficiaire, string Status, DateTime DateOuverture, DateTime? DateCloture, DateTime DateLimite);
 

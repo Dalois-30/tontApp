@@ -29,6 +29,40 @@ export function formatJour(dateStr: string): string {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(dateStr));
 }
 
+/**
+ * Label of a member's status in the open round when part of it is paid or pending. A partly paid round is
+ * never shown as a plain "Payé": "Payé partiellement · reste 6 000 FCFA" (and/or "· 6 000 FCFA à valider");
+ * a pending payment smaller than the contribution: "4 000 FCFA à valider · reste 6 000 FCFA".
+ * undefined: the default label of the status applies.
+ */
+export function libelleStatutMembre(m: { statut: string; resteTour?: number; enAttenteTour?: number }): string | undefined {
+  const reste = m.resteTour ?? 0;
+  const aValider = m.enAttenteTour ?? 0;
+  if (m.statut === "paye_partiel") {
+    const parts = ["Payé partiellement"];
+    if (reste > 0) parts.push(`reste ${formatMontant(reste)}`);
+    if (aValider > 0) parts.push(`${formatMontant(aValider)} à valider`);
+    return parts.join(" · ");
+  }
+  if (m.statut === "en_attente" && reste > 0)
+    return `${aValider > 0 ? `${formatMontant(aValider)} à valider` : "En attente"} · reste ${formatMontant(reste)}`;
+  return undefined;
+}
+
+/** Statuses of members who owe nothing on the open round, whatever the amounts. */
+const SANS_DU = new Set(["beneficiaire", "suspendu", "adhesion_en_attente"]);
+
+/** Whether the member still owes something on the open round (a reminder can be sent). */
+export function doitSurLeTour(m: { statut: string; resteTour?: number }, cotisation: number): boolean {
+  return !SANS_DU.has(m.statut) && resteTourOuvert(m, cotisation) > 0;
+}
+
+/** What remains to collect on the open round; falls back on the status for an older API. */
+export function resteTourOuvert(m: { statut: string; resteTour?: number }, cotisation: number): number {
+  if (m.resteTour !== undefined) return m.resteTour;
+  return m.statut === "a_payer" || m.statut === "en_retard" ? cotisation : 0;
+}
+
 const STATUTS_TONTINE: Record<string, string> = {
   Draft: "Brouillon", Active: "Active", Suspended: "Suspendue", Completed: "Terminée", Cancelled: "Annulée",
   Brouillon: "Brouillon", Ouvert: "Ouvert", Clos: "Clos", Annule: "Annulé",

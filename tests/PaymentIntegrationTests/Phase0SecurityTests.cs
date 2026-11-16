@@ -11,6 +11,7 @@ using Domain.PaymentManagement.Entities;
 using Domain.PaymentManagement.Repositories;
 using Domain.PaymentManagement.ValueObjects;
 using Domain.TontineManagement;
+using Domain.TontineManagement.Entities;
 using Domain.TontineManagement.Repositories;
 using Domain.TontineManagement.ValueObjects;
 using FluentAssertions;
@@ -234,6 +235,70 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour.Id.Value, membre.Id.Value, 5000m, "x"), CancellationToken.None);
 
         result.IsSuccess.Should().BeFalse();
+    }
+
+    private (Tontine, Round, Member) AvecVersementsExistants(params (decimal Montant, bool Confirme)[] existants)
+    {
+        var tontine = BuildActiveTontine();
+        SetupNoExistingVersements();
+        var tour = tontine.Rounds.First();
+        var membre = tontine.Members.First(m => m.Id != tour.BeneficiaryId);
+        var liste = existants.Select(e =>
+        {
+            var v = Versement.Create(tontine.Id, TourId.From(tour.Id.Value), PayeurId.From(membre.Id.Value), Montant.Create(e.Montant));
+            if (e.Confirme) v.Confirmer("CASH");
+            return v;
+        }).ToList();
+        _versementRepo.Setup(r => r.GetByTontineAndTourAsync(tontine.Id, It.IsAny<TourId>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(liste);
+        return (tontine, tour, membre);
+    }
+
+    [Fact]
+    public async Task Manuel_ComplementApresPartielValide_EstAccepte()
+    {
+        var (tontine, tour, membre) = AvecVersementsExistants((2000m, true));
+
+        var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
+            tontine.Id.Value, tour.Id.Value, membre.Id.Value, 3000m, "Espèces"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+    }
+
+    [Fact]
+    public async Task Manuel_ComplementApresPartielEnAttente_EstAccepte()
+    {
+        var (tontine, tour, membre) = AvecVersementsExistants((2000m, false));
+
+        var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
+            tontine.Id.Value, tour.Id.Value, membre.Id.Value, 3000m, "Espèces"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+    }
+
+    [Fact]
+    public async Task Manuel_TourCouvertParValidePlusAttente_EstRefuse()
+    {
+        var (tontine, tour, membre) = AvecVersementsExistants((2000m, true), (3000m, false));
+
+        var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
+            tontine.Id.Value, tour.Id.Value, membre.Id.Value, 1000m, "Espèces"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("couverte").And.Contain("en attente de validation");
+        _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Manuel_TourEntierementValide_EstRefuse()
+    {
+        var (tontine, tour, membre) = AvecVersementsExistants((5000m, true));
+
+        var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
+            tontine.Id.Value, tour.Id.Value, membre.Id.Value, 1000m, "Espèces"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("entièrement payée");
     }
 
     // ── Domain: actor in audit trail ────────────────────────────────

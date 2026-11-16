@@ -42,19 +42,24 @@ export const rolesTontine = (g?: Gouvernance) => ({
 export const monMembre = (t: TontineDetail | undefined, userId: string | undefined): TontineMember | undefined =>
   t?.membres.find((m) => !!userId && m.utilisateurId === userId);
 
+/** A round a member can still declare a payment for, with what remains to pay on it (FCFA). */
+export type TourDu = TontineTour & { reste: number };
+
 /**
- * Rounds a member can declare a payment for: the open round if still unpaid, then the past rounds
- * they still owe (catch-up). A payment already declared or validated on a round removes it.
+ * Rounds a member can declare a payment for: the open round while validated + pending does not cover
+ * the contribution (a partial payment leaves the rest due), then the past rounds they still owe (catch-up).
  */
-export function toursDus(t: TontineDetail | undefined, m: TontineMember | undefined): TontineTour[] {
+export function toursDus(t: TontineDetail | undefined, m: TontineMember | undefined): TourDu[] {
   if (!t || !m || m.statutTour === 'suspendu' || m.statutTour === 'adhesion_en_attente') return [];
-  const dus: TontineTour[] = [];
+  const dus: TourDu[] = [];
   const ouvert = t.tours.find((x) => x.estOuvert);
-  if (ouvert && (m.statutTour === 'a_payer' || m.statutTour === 'en_retard')) dus.push(ouvert);
-  for (const n of m.toursImpayes ?? []) {
+  // Older API without resteTour: fall back on the status.
+  const resteOuvert = m.resteTour ?? (m.statutTour === 'a_payer' || m.statutTour === 'en_retard' ? t.montantCotisation : 0);
+  if (ouvert && m.statutTour !== 'beneficiaire' && resteOuvert > 0) dus.push({ ...ouvert, reste: resteOuvert });
+  (m.toursImpayes ?? []).forEach((n, i) => {
     const tour = t.tours.find((x) => x.numero === n);
-    if (tour && !tour.estOuvert) dus.push(tour);
-  }
+    if (tour && !tour.estOuvert) dus.push({ ...tour, reste: m.restesImpayes?.[i] ?? t.montantCotisation });
+  });
   return dus;
 }
 

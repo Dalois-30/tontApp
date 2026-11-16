@@ -25,6 +25,12 @@ export interface MembreDto {
   /** Arrears for earlier rounds (FCFA) */
   resteDu?: number;
   toursImpayes?: number[];
+  /** Remainder of each round in toursImpayes (same order), FCFA */
+  restesImpayes?: number[] | null;
+  /** Still to collect on the open round (contribution − validated − pending), FCFA */
+  resteTour?: number;
+  /** Declared on the open round and waiting for validation, FCFA */
+  enAttenteTour?: number;
 }
 
 export interface TourDto {

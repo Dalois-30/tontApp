@@ -17,8 +17,8 @@ public sealed class EnregistrerVersementManuelCommandValidator
             .NotEmpty().WithMessage("MembreId est requis.");
 
         RuleFor(x => x.Montant)
-            .GreaterThan(100m)
-            .WithMessage("Le montant doit être supérieur à 100 FCFA.");
+            .GreaterThan(0m)
+            .WithMessage("Le montant doit être supérieur à 0 FCFA.");
 
         RuleFor(x => x.DescriptionPreuve)
             .NotEmpty().WithMessage("La description de la preuve est requise.");

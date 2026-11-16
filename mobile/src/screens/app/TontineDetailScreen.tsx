@@ -188,7 +188,7 @@ export function TontineDetailScreen({
             ) : null}
           </View>
           {member.statutPaiement ? (
-            <MembreStatusBadge statut={member.statutPaiement} />
+            <MembreStatusBadge statut={member.statutPaiement} reste={member.resteTour} aValider={member.enAttenteTour} />
           ) : null}
         </View>
       );

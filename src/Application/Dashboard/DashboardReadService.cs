@@ -137,7 +137,11 @@ public sealed class DashboardReadService : IDashboardReadService
             return null;
 
         var versements = await _versements.GetByTontineAndTourAsync(tontine.Id, TourId.From(tourId), ct);
-        var aJour = versements.Where(v => v.Statut != VersementStatus.Echoue).Select(v => v.PayeurId.Value).ToHashSet();
+        // Up to date once validated + pending covers the contribution (a partial payment still owes the rest).
+        var aJour = versements.Where(v => v.Statut != VersementStatus.Echoue)
+            .GroupBy(v => v.PayeurId.Value)
+            .Where(g => g.Sum(v => v.Montant.Valeur) >= tontine.ContributionAmount.Amount)
+            .Select(g => g.Key).ToHashSet();
         var joursRetard = Math.Max(0, (int)(DateTime.UtcNow - tour.DateLimite).TotalDays);
 
         var result = new List<RetardataireDto>();
@@ -156,11 +160,28 @@ public sealed class DashboardReadService : IDashboardReadService
         if (tontine is null)
             return 0;
 
-        var montant = tontine.ContributionAmount.Amount.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("fr-FR"));
-        var message = $"Rappel {tontine.Name} : votre cotisation de {montant} {tontine.ContributionAmount.Currency} est attendue. Merci de la remettre au gestionnaire.";
+        var fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+        var cotisation = tontine.ContributionAmount.Amount;
+        var devise = tontine.ContributionAmount.Currency;
+        var messageComplet = $"Rappel {tontine.Name} : votre cotisation de {cotisation.ToString("N0", fr)} {devise} est attendue. Merci de la remettre au gestionnaire.";
+
+        // A member who already paid part of the open round is reminded of the rest only
+        // (same rule as the details: contribution − validated − pending).
+        var tourOuvert = tontine.Rounds.FirstOrDefault(r => !r.IsCompleted);
+        var dejaVerse = tourOuvert is null
+            ? new Dictionary<Guid, decimal>()
+            : (await _versements.GetByTontineAsync(tontine.Id, ct))
+                .Where(v => v.TourId.Value == tourOuvert.Id.Value && v.Statut != VersementStatus.Echoue)
+                .GroupBy(v => v.PayeurId.Value)
+                .ToDictionary(g => g.Key, g => g.Sum(v => v.Montant.Valeur));
+
         var count = 0;
         foreach (var membre in tontine.Members.Where(m => membreIds.Contains(m.Id.Value)))
         {
+            var reste = cotisation - dejaVerse.GetValueOrDefault(membre.Id.Value);
+            var message = reste > 0 && reste < cotisation
+                ? $"Rappel {tontine.Name} : il reste {reste.ToString("N0", fr)} {devise} à payer sur votre cotisation de {cotisation.ToString("N0", fr)} {devise}. Merci de le remettre au gestionnaire."
+                : messageComplet;
             if (await _notificationService.PlanifierNotificationAsync(membre.Id.Value.ToString(), NotificationType.RappelPaiement, message, ct))
                 count++;
         }
@@ -253,28 +274,40 @@ public sealed class DashboardReadService : IDashboardReadService
     {
         var tourOuvert = tontine.Rounds.FirstOrDefault(r => !r.IsCompleted);
         var versements = await _versements.GetByTontineAsync(tontine.Id, ct);
-        IReadOnlyList<Versement> versementsTour = tourOuvert is null
-            ? []
-            : versements.Where(v => v.TourId.Value == tourOuvert.Id.Value).ToList();
 
-        // A round counts as settled for a member once a payment is pending or confirmed.
-        var regles = versements
+        // Amounts per (member, round): only confirmed payments count as paid, pending ones are "to validate".
+        // A round is settled for a member once validated + pending covers the contribution.
+        var montants = versements
             .Where(v => v.Statut != VersementStatus.Echoue)
-            .Select(v => (v.PayeurId.Value, v.TourId.Value))
-            .ToHashSet();
+            .GroupBy(v => (v.PayeurId.Value, v.TourId.Value))
+            .ToDictionary(g => g.Key, g => new MontantsTour(
+                g.Where(v => v.Statut == VersementStatus.Confirme).Sum(v => v.Montant.Valeur),
+                g.Where(v => v.Statut == VersementStatus.EnAttente).Sum(v => v.Montant.Valeur)));
         var cotisation = tontine.ContributionAmount.Amount;
+        decimal Reste(MontantsTour m) => Math.Max(0, cotisation - m.Valide - m.EnAttente);
 
         var membres = new List<DashMembreDto>();
         foreach (var m in tontine.Members.OrderBy(m => m.Statut == StatutMembre.EnAttente).ThenBy(m => m.Rang))
         {
-            var impayes = m.Statut == StatutMembre.Actif
+            var arrieres = m.Statut == StatutMembre.Actif
                 ? tontine.ToursDusPar(m.Id)
-                    .Where(r => r.Id != tourOuvert?.Id && !regles.Contains((m.Id.Value, r.Id.Value)))
-                    .Select(r => r.RoundNumber).ToList()
+                    .Where(r => r.Id != tourOuvert?.Id)
+                    .Select(r => (r.RoundNumber, Reste: Reste(montants.GetValueOrDefault((m.Id.Value, r.Id.Value), MontantsTour.Zero))))
+                    .Where(x => x.Reste > 0)
+                    .ToList()
                 : [];
+
+            var statut = StatutMembreTour(m, tourOuvert, montants, cotisation);
+            var duTourOuvert = tourOuvert is not null && m.Statut == StatutMembre.Actif && m.Id != tourOuvert.BeneficiaryId;
+            var duTour = duTourOuvert
+                ? montants.GetValueOrDefault((m.Id.Value, tourOuvert!.Id.Value), MontantsTour.Zero)
+                : MontantsTour.Zero;
+
             membres.Add(new DashMembreDto(m.Id.Value, m.Name, await TelephoneAsync(m, ct),
-                StatutMembreTour(m, tourOuvert, versementsTour), m.UtilisateurId?.Value, m.Rang,
-                impayes.Count * cotisation, impayes));
+                statut, m.UtilisateurId?.Value, m.Rang,
+                arrieres.Sum(x => x.Reste), arrieres.Select(x => x.RoundNumber).ToList(),
+                duTourOuvert ? Reste(duTour) : 0, duTour.EnAttente,
+                arrieres.Select(x => x.Reste).ToList()));
         }
 
         var parId = membres.ToDictionary(m => m.Id);
@@ -289,16 +322,27 @@ public sealed class DashboardReadService : IDashboardReadService
             tontine.AdhesionEnCours.ToString(), tontine.RattrapageAdhesionTardive);
     }
 
-    private static string StatutMembreTour(Member m, Round? tour, IReadOnlyList<Versement> versements)
+    private sealed record MontantsTour(decimal Valide, decimal EnAttente)
+    {
+        public static readonly MontantsTour Zero = new(0, 0);
+    }
+
+    /// <summary>
+    /// Status of a member in the open round, computed on amounts: validated ≥ contribution → paye;
+    /// some validated but less → paye_partiel (not a conventional payment); only pending → en_attente.
+    /// </summary>
+    private static string StatutMembreTour(Member m, Round? tour,
+        IReadOnlyDictionary<(Guid, Guid), MontantsTour> montants, decimal cotisation)
     {
         if (m.Statut == StatutMembre.Suspendu) return "suspendu";
         if (m.Statut == StatutMembre.EnAttente) return "adhesion_en_attente";
         if (tour is null) return "a_payer";
         if (m.Id == tour.BeneficiaryId) return "beneficiaire";
 
-        var siens = versements.Where(v => v.PayeurId.Value == m.Id.Value).ToList();
-        if (siens.Any(v => v.Statut == VersementStatus.Confirme)) return "paye";
-        if (siens.Any(v => v.Statut == VersementStatus.EnAttente)) return "en_attente";
+        var siens = montants.GetValueOrDefault((m.Id.Value, tour.Id.Value), MontantsTour.Zero);
+        if (siens.Valide >= cotisation && siens.Valide > 0) return "paye";
+        if (siens.Valide > 0) return "paye_partiel";
+        if (siens.EnAttente > 0) return "en_attente";
         return DateTime.UtcNow > tour.DateLimite ? "en_retard" : "a_payer";
     }
 

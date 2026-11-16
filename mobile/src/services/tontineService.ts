@@ -70,11 +70,14 @@ interface BackendTontineDetailsDto {
     id: string;
     nom: string;
     telephone: string | null;
-    statut: string; // paye | en_attente | a_payer | en_retard | beneficiaire | suspendu
+    statut: string; // paye | paye_partiel | en_attente | a_payer | en_retard | beneficiaire | suspendu
     utilisateurId: string | null;
     rang: number;
     resteDu: number;
     toursImpayes: number[];
+    resteTour?: number;
+    enAttenteTour?: number;
+    restesImpayes?: number[] | null;
   }[];
   tours: {
     id: string;
@@ -92,6 +95,7 @@ interface BackendTontineDetailsDto {
 
 function mapStatutPaiement(statut: string): StatutPaiement | undefined {
   if (statut === 'paye') return 'paye';
+  if (statut === 'paye_partiel') return 'paye_partiel';
   if (statut === 'en_retard') return 'en_retard';
   if (statut === 'en_attente') return 'en_attente';
   if (statut === 'a_payer') return 'a_payer';
@@ -124,6 +128,9 @@ function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
       statutPaiement: mapStatutPaiement(m.statut),
       resteDu: m.resteDu,
       toursImpayes: m.toursImpayes,
+      restesImpayes: m.restesImpayes ?? undefined,
+      resteTour: m.resteTour,
+      enAttenteTour: m.enAttenteTour,
       utilisateurId: m.utilisateurId,
       statutTour: m.statut,
     })),

@@ -61,7 +61,7 @@ export type TontineStatus =
   | 'Cancelled';
 
 /** Payment status for a member in a tour */
-export type StatutPaiement = 'paye' | 'en_attente' | 'a_payer' | 'en_retard' | 'adhesion_en_attente';
+export type StatutPaiement = 'paye' | 'paye_partiel' | 'en_attente' | 'a_payer' | 'en_retard' | 'adhesion_en_attente';
 
 /** Tontine detail */
 export interface TontineDetail extends TontineSummary {
@@ -89,9 +89,15 @@ export interface TontineMember {
   /** Contributions owed for earlier rounds (FCFA), including a late member's catch-up */
   resteDu?: number;
   toursImpayes?: number[];
+  /** Remainder of each round in toursImpayes (same order), FCFA */
+  restesImpayes?: number[];
+  /** Still to declare on the open round (contribution − validated − pending), FCFA */
+  resteTour?: number;
+  /** Declared on the open round and waiting for the trésorier's validation, FCFA */
+  enAttenteTour?: number;
   /** Linked account, when the member has one */
   utilisateurId?: string | null;
-  /** Raw status in the current round (paye, en_attente, a_payer, en_retard, beneficiaire, suspendu, adhesion_en_attente) */
+  /** Raw status in the current round (paye, paye_partiel, en_attente, a_payer, en_retard, beneficiaire, suspendu, adhesion_en_attente) */
   statutTour?: string;
 }
 

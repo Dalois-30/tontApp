@@ -64,21 +64,30 @@ public sealed class EnregistrerVersementManuelCommandHandler
         var tourId = TourId.From(request.TourId);
         var payeurId = PayeurId.From(request.MembreId);
 
-        // Idempotence: reject if a pending or confirmed versement already exists for this membre + tour
+        // A partial payment leaves the rest due: a complement is accepted until validated + pending
+        // covers the contribution; beyond that the round is settled (or awaiting validation).
         var existingVersements = await _versementRepository.GetByTontineAndTourAsync(
             tontineId, tourId, cancellationToken);
 
-        if (existingVersements.Any(v => v.PayeurId == payeurId && v.Statut != VersementStatus.Echoue))
+        var siens = existingVersements.Where(v => v.PayeurId == payeurId && v.Statut != VersementStatus.Echoue).ToList();
+        var valide = siens.Where(v => v.Statut == VersementStatus.Confirme).Sum(v => v.Montant.Valeur);
+        var enAttente = siens.Where(v => v.Statut == VersementStatus.EnAttente).Sum(v => v.Montant.Valeur);
+        var cotisation = tontine.ContributionAmount.Amount;
+        if (siens.Count > 0 && valide + enAttente >= cotisation)
         {
-            return Result<Guid>.Failure(
-                $"Un versement est déjà déclaré (en attente de validation) ou validé pour {membre.Name} sur ce tour.");
+            var fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+            return Result<Guid>.Failure(enAttente > 0
+                ? $"Un versement est déjà déclaré pour {membre.Name} sur ce tour et la cotisation est couverte "
+                  + $"({valide.ToString("N0", fr)} FCFA validés, {enAttente.ToString("N0", fr)} FCFA en attente de validation) : rien de plus n'est dû."
+                : $"La cotisation de {membre.Name} sur ce tour est déjà entièrement payée et validée : rien de plus n'est dû.");
         }
 
         // Build hash chain from last versement for this tontine
         var lastVersement = await _versementRepository.GetLastByTontineAsync(tontineId, cancellationToken);
         var hashPrecedent = lastVersement?.HashCourant ?? string.Empty;
 
-        var montant = Montant.Create(request.Montant, request.Devise);
+        // Any positive amount: a small remainder of a partial payment must stay payable.
+        var montant = Montant.CreateDeclare(request.Montant, request.Devise);
 
         // Audit entries are chained per tontine: start from the tontine's last audit hash.
         var dernierHashAudit = await _auditTrailService.GetDernierHash(tontineId, cancellationToken);

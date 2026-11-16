@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { formatMontant, formatDate } from "@/lib/format";
+import { formatMontant, formatDate, resteTourOuvert, doitSurLeTour, libelleStatutMembre } from "@/lib/format";
 import type { TontineDto, VersementDto } from "@/lib/types";
 import { Badge, Card, EmptyState, Icon, PageHeader } from "@/components/ui";
 import Pagination from "@/components/Pagination";
 
 interface PaiementsResponse { items: VersementDto[]; totalCount: number; page: number; pageSize: number; totalPages: number }
 
-const STATUTS_A_ENCAISSER = new Set(["a_payer", "en_retard"]);
 type Filtre = "tous" | "en_attente" | "confirme" | "rejete";
 
 export default function PaiementsPage() {
@@ -52,24 +51,39 @@ export default function PaiementsPage() {
   useEffect(() => { fetchAll(page); }, [page, fetchAll]);
 
   const tourOuvert = tontine?.tours.find((t) => t.status === "Ouvert");
-  const membresAEncaisser = tontine?.membres.filter((m) => STATUTS_A_ENCAISSER.has(m.statut) || (m.resteDu ?? 0) > 0) ?? [];
+  const cotisation = tontine?.montantCotisation ?? 0;
+  // A partly paid (or partly pending) round stays collectable for its rest, like an unpaid one.
+  const membresAEncaisser = tontine?.membres.filter((m) => doitSurLeTour(m, cotisation) || (m.resteDu ?? 0) > 0) ?? [];
   const membreChoisi = tontine?.membres.find((m) => m.id === membreId);
-  const toursPossibles = membreChoisi
+  const libelleReste = (reste: number) => (reste < cotisation ? ` · reste ${formatMontant(reste)}` : "");
+  /** Rounds that can be collected for a member (arrears first, then the open round), with what remains on each. */
+  const toursDe = (m: TontineDto["membres"][number] | undefined) => m
     ? [
-        ...(membreChoisi.toursImpayes ?? []).map((n) => {
+        ...(m.toursImpayes ?? []).map((n, i) => {
           const t = tontine!.tours.find((x) => x.numero === n);
-          return t ? { id: t.id, label: `Tour ${n} · rattrapage` } : null;
+          const reste = m.restesImpayes?.[i] ?? cotisation;
+          return t ? { id: t.id, label: `Tour ${n} · rattrapage${libelleReste(reste)}`, reste } : null;
         }),
-        ...(tourOuvert && STATUTS_A_ENCAISSER.has(membreChoisi.statut) ? [{ id: tourOuvert.id, label: `Tour ${tourOuvert.numero} · en cours` }] : []),
-      ].filter((x): x is { id: string; label: string } => x !== null)
+        ...(tourOuvert && doitSurLeTour(m, cotisation)
+          ? [{ id: tourOuvert.id, label: `Tour ${tourOuvert.numero} · en cours${libelleReste(resteTourOuvert(m, cotisation))}`, reste: resteTourOuvert(m, cotisation) }]
+          : []),
+      ].filter((x): x is { id: string; label: string; reste: number } => x !== null)
     : [];
+  const toursPossibles = toursDe(membreChoisi);
 
+  /** Selects a round and proposes what remains on it (the full contribution, or the rest of a partial payment). */
+  function choisirTour(id: string) {
+    setTourId(id);
+    const t = toursPossibles.find((x) => x.id === id);
+    if (t) setMontant(String(t.reste));
+  }
+
+  /** Pre-selects the member's first collectable round and proposes its remainder; nothing due → no round, no amount. */
   function choisirMembre(id: string) {
     setMembreId(id);
-    const m = tontine?.membres.find((x) => x.id === id);
-    const premierImpaye = m?.toursImpayes?.[0];
-    const t = premierImpaye !== undefined ? tontine?.tours.find((x) => x.numero === premierImpaye) : tourOuvert;
-    setTourId(t?.id ?? "");
+    const premier = toursDe(tontine?.membres.find((x) => x.id === id))[0];
+    setTourId(premier?.id ?? "");
+    setMontant(premier && premier.reste > 0 ? String(premier.reste) : "");
   }
 
   async function enregistrer(e: React.FormEvent) {
@@ -136,21 +150,21 @@ export default function PaiementsPage() {
                 <option value="">Choisir un membre</option>
                 {membresAEncaisser.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.nom}{m.statut === "en_retard" ? " · en retard" : ""}{(m.resteDu ?? 0) > 0 ? ` · reste dû ${formatMontant(m.resteDu ?? 0)}` : ""}
+                    {m.nom}{m.statut === "en_retard" ? " · en retard" : ""}{libelleStatutMembre(m) ? ` · ${libelleStatutMembre(m)}` : ""}{(m.resteDu ?? 0) > 0 ? ` · reste dû ${formatMontant(m.resteDu ?? 0)}` : ""}
                   </option>
                 ))}
               </select>
             </div>
             <div>
               <label htmlFor="tour" className="label">Tour</label>
-              <select id="tour" name="tour" value={tourId} onChange={(e) => setTourId(e.target.value)} required className="input" disabled={!membreChoisi}>
+              <select id="tour" name="tour" value={tourId} onChange={(e) => choisirTour(e.target.value)} required className="input" disabled={!membreChoisi}>
                 <option value="">{membreChoisi ? "Choisir le tour" : "Selon le membre"}</option>
                 {toursPossibles.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>
             </div>
             <div>
               <label htmlFor="montant" className="label">Montant (FCFA)</label>
-              <input id="montant" name="montant" type="number" min={100} value={montant} onChange={(e) => setMontant(e.target.value)} required className="input num" />
+              <input id="montant" name="montant" type="number" min={1} value={montant} onChange={(e) => setMontant(e.target.value)} required className="input num" />
             </div>
             <div>
               <label htmlFor="preuve" className="label">Preuve</label>

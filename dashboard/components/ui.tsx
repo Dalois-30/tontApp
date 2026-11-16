@@ -93,7 +93,7 @@ const TONE_ICON: Record<Tone, string> = { good: "check", warn: "clock", serious:
 
 /** Every status string used across the API, mapped to a French label and a tone. */
 const STATUTS: Record<string, [string, Tone]> = {
-  paye: ["Payé", "good"], confirme: ["Validé", "good"], valide: ["Validé", "good"], soldee: ["Soldée", "good"],
+  paye: ["Payé", "good"], paye_partiel: ["Payé partiellement", "serious"], confirme: ["Validé", "good"], valide: ["Validé", "good"], soldee: ["Soldée", "good"],
   en_attente: ["En attente", "warn"], partielle: ["Partielle", "warn"], a_payer: ["À payer", "neutral"],
   a_venir: ["À venir", "neutral"], en_retard: ["En retard", "bad"], rejete: ["Rejeté", "bad"],
   beneficiaire: ["Bénéficiaire", "info"], suspendu: ["Suspendu", "neutral"], adhesion_en_attente: ["À valider", "info"],

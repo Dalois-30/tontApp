@@ -53,11 +53,94 @@ public class DashboardReadServiceTests
     private Guid Membre(string nom) => _tontine.Members.First(m => m.Name == nom).Id.Value;
     private Guid Tour => _tontine.Rounds.First().Id.Value;
 
-    private void Versement(string nom, bool confirmer)
+    private void Versement(string nom, bool confirmer, decimal montant = 5000, Guid? tour = null)
     {
-        var v = Domain.PaymentManagement.Versement.Create(_tontine.Id, TourId.From(Tour), PayeurId.From(Membre(nom)), Montant.Create(5000));
+        var v = Domain.PaymentManagement.Versement.Create(_tontine.Id, TourId.From(tour ?? Tour), PayeurId.From(Membre(nom)), Montant.Create(montant));
         if (confirmer) v.Confirmer("CASH");
         _stored.Add(v);
+    }
+
+    // ── Partial payments (contribution 5 000) ───────────────────────
+
+    [Fact]
+    public async Task PartielValide_PayePartiel_AvecResteDuTour()
+    {
+        Versement("Bob", confirmer: true, montant: 2000);
+
+        var bob = (await Service().GetTontineAsync(_tontine.Id.Value))!.Membres.Single(m => m.Nom == "Bob");
+
+        bob.Statut.Should().Be("paye_partiel");
+        bob.ResteTour.Should().Be(3000);
+        bob.EnAttenteTour.Should().Be(0);
+        bob.ResteDu.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Complement_Valide_PasseAPaye()
+    {
+        Versement("Bob", confirmer: true, montant: 2000);
+        Versement("Bob", confirmer: true, montant: 3000);
+
+        var bob = (await Service().GetTontineAsync(_tontine.Id.Value))!.Membres.Single(m => m.Nom == "Bob");
+
+        bob.Statut.Should().Be("paye");
+        bob.ResteTour.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task PartielPlusAttente_PayePartiel_AvecMontantAValider_EtRienAPayer()
+    {
+        Versement("Bob", confirmer: true, montant: 2000);
+        Versement("Bob", confirmer: false, montant: 3000);
+
+        var bob = (await Service().GetTontineAsync(_tontine.Id.Value))!.Membres.Single(m => m.Nom == "Bob");
+
+        bob.Statut.Should().Be("paye_partiel");
+        bob.EnAttenteTour.Should().Be(3000);
+        bob.ResteTour.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Complet_Paye_SansReste()
+    {
+        Versement("Bob", confirmer: true);
+
+        var membres = (await Service().GetTontineAsync(_tontine.Id.Value))!.Membres;
+
+        membres.Single(m => m.Nom == "Bob").Statut.Should().Be("paye");
+        membres.Single(m => m.Nom == "Bob").ResteTour.Should().Be(0);
+        membres.Single(m => m.Nom == "Dan").ResteTour.Should().Be(5000);
+        membres.Single(m => m.Nom == "Alice").ResteTour.Should().Be(0); // beneficiary
+    }
+
+    [Fact]
+    public async Task ArrierePartiel_ResteDansLesImpayes_AvecLeReste()
+    {
+        Versement("Bob", confirmer: true, montant: 2000);   // round 1, partial
+        Versement("Carol", confirmer: true, montant: 2000);
+        Versement("Carol", confirmer: false, montant: 3000); // round 1 covered (validated + pending)
+        Versement("Dan", confirmer: true);                   // round 1 paid
+        _tontine.CloseRound(_tontine.Rounds.First().Id);
+
+        var membres = (await Service().GetTontineAsync(_tontine.Id.Value))!.Membres;
+
+        var bob = membres.Single(m => m.Nom == "Bob");
+        bob.ToursImpayes.Should().Equal(1);
+        bob.ResteDu.Should().Be(3000);
+        bob.RestesImpayes.Should().Equal(3000m);
+        membres.Single(m => m.Nom == "Carol").ToursImpayes.Should().BeEmpty();
+        membres.Single(m => m.Nom == "Dan").ResteDu.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Retardataires_UnPaiementPartielResteRetardataire()
+    {
+        Versement("Bob", confirmer: true, montant: 2000);
+        Versement("Carol", confirmer: true);
+
+        var result = await Service().GetRetardatairesAsync(_tontine.Id.Value, Tour);
+
+        result!.Select(r => r.Nom).Should().BeEquivalentTo("Bob", "Dan");
     }
 
     [Fact]
@@ -116,6 +199,23 @@ public class DashboardReadServiceTests
         count.Should().Be(1);
         _notif.Verify(n => n.PlanifierNotificationAsync(Membre("Dan").ToString(), NotificationType.RappelPaiement,
             It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Relancer_PayeurPartiel_RecoitLeResteDansSonMessage()
+    {
+        Versement("Bob", confirmer: true, montant: 2000);
+        var messages = new Dictionary<string, string>();
+        _notif.Setup(n => n.PlanifierNotificationAsync(It.IsAny<string>(), NotificationType.RappelPaiement, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, NotificationType, string, CancellationToken>((dest, _, msg, _) => messages[dest] = msg)
+            .ReturnsAsync(true);
+
+        var count = await Service().RelancerAsync(_tontine.Id.Value, [Membre("Bob"), Membre("Dan")]);
+
+        static string N(decimal x) => x.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("fr-FR"));
+        count.Should().Be(2);
+        messages[Membre("Bob").ToString()].Should().Contain($"il reste {N(3000)} XOF").And.Contain($"cotisation de {N(5000)} XOF");
+        messages[Membre("Dan").ToString()].Should().Contain($"votre cotisation de {N(5000)} XOF est attendue");
     }
 
     [Fact]

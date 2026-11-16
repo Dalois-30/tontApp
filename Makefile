@@ -16,6 +16,9 @@ api: ## Lance l'API sur http://localhost:5243
 test: ## Lance tous les tests
 	./scripts/dev.sh test
 
+test-lots: ## Tests un projet à la fois, selon la mémoire disponible
+	./scripts/test-par-lots.sh
+
 build: ## Compile la solution
 	PATH="$$HOME/.dotnet:$$PATH" DOTNET_ROOT="$$HOME/.dotnet" dotnet build tontApp.slnx
 

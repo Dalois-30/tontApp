@@ -10,7 +10,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../../../navigation/types';
 import { s, Carte, Bouton, Puce, Ligne } from '../../../components/kit';
 import { ErrorBanner } from '../../../components/ErrorBanner';
-import { formatMontant } from '../../../utils/format';
+import { formatMontant, libelleStatutTour } from '../../../utils/format';
 import { spacing } from '../../../config/theme';
 import { useAuthStore } from '../../../store/authStore';
 import { tontineService } from '../../../services/tontineService';
@@ -18,6 +18,7 @@ import { ChoixPersonne } from '../projet/commun';
 import { useTontine, rolesTontine, monMembre, toursDus, messageErreur } from './commun';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'DeclarerVersement'>;
+
 
 const MOYENS = ['Espèces', 'Orange Money', 'MTN MoMo', 'Virement'];
 
@@ -45,7 +46,14 @@ export function DeclarerVersementScreen({ route, navigation }: Props): React.JSX
   useEffect(() => {
     setTourId((actuel) => (actuel && dus.some((x) => x.id === actuel) ? actuel : dus[0]?.id ?? null));
   }, [dus]);
-  useEffect(() => { if (t && !montant) setMontant(String(t.montantCotisation)); }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Proposed amount: what remains on the chosen round (the full contribution, or the rest of a partial payment).
+  // Re-proposed when the round changes; a refetch only updates it while the user has not typed an amount.
+  const [montantSaisi, setMontantSaisi] = useState(false);
+  const resteChoisi = dus.find((x) => x.id === tourId)?.reste;
+  useEffect(() => { setMontantSaisi(false); }, [tourId]);
+  useEffect(() => {
+    if (!montantSaisi) setMontant(resteChoisi !== undefined ? String(resteChoisi) : t ? String(t.montantCotisation) : '');
+  }, [tourId, resteChoisi, montantSaisi, t?.montantCotisation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) return <View style={s.contenu}><ErrorBanner message={error.message} /></View>;
   if (!t || !gouvernance) return <View style={s.contenu}><Text style={s.muted}>Chargement…</Text></View>;
@@ -97,6 +105,10 @@ export function DeclarerVersementScreen({ route, navigation }: Props): React.JSX
       {cible ? (
         <Carte style={{ marginTop: spacing.sm }}>
           <Ligne label="Cotisation" valeur={formatMontant(t.montantCotisation)} />
+          {libelleStatutTour(cible.statutTour, cible.resteTour, cible.enAttenteTour) ? (
+            <Ligne label="Tour en cours" valeur={libelleStatutTour(cible.statutTour, cible.resteTour, cible.enAttenteTour) ?? ''}
+              ton={(cible.resteTour ?? 0) > 0 ? 'mauvais' : 'attente'} />
+          ) : null}
           <Ligne label="Reste dû (tours passés)" valeur={formatMontant(cible.resteDu ?? 0)} ton={(cible.resteDu ?? 0) > 0 ? 'mauvais' : undefined} />
         </Carte>
       ) : null}
@@ -107,13 +119,15 @@ export function DeclarerVersementScreen({ route, navigation }: Props): React.JSX
       ) : (
         <View style={s.puces}>
           {dus.map((x) => (
-            <Puce key={x.id} texte={`Tour ${x.numero}${x.estOuvert ? ' (en cours)' : ' (en retard)'}`} actif={tourId === x.id} onPress={() => setTourId(x.id)} />
+            <Puce key={x.id}
+              texte={`Tour ${x.numero}${x.estOuvert ? ' (en cours)' : ' (en retard)'}${x.reste < t.montantCotisation ? ` · reste ${formatMontant(x.reste)}` : ''}`}
+              actif={tourId === x.id} onPress={() => setTourId(x.id)} />
           ))}
         </View>
       )}
 
       <Text style={s.champLabel}>Montant versé (FCFA)</Text>
-      <TextInput style={s.champ} keyboardType="number-pad" value={montant} onChangeText={setMontant} accessibilityLabel="Montant versé en FCFA" />
+      <TextInput style={s.champ} keyboardType="number-pad" value={montant} onChangeText={(x) => { setMontant(x); setMontantSaisi(true); }} accessibilityLabel="Montant versé en FCFA" />
 
       <Text style={s.champLabel}>Moyen de paiement</Text>
       <View style={s.puces}>
