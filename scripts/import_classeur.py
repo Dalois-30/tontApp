@@ -12,9 +12,12 @@ comme participants sans compte et importe chaque paiement à sa date, déjà val
 
 Usage :
   python3 scripts/import_classeur.py CLASSEUR.xlsx [--unite 1000] [--api http://localhost:5243/api/v1]
-         [--tel +237670000002] [--mdp Demo2026!] [--dry-run]
+         [--tel +237670000002] [--mdp Demo2026!] [--comptes] [--membres] [--dry-run]
 
 --unite : facteur appliqué aux montants du classeur (1000 si « 15 » signifie 15 000 FCFA).
+--comptes : lie chaque participant au compte qui porte son numéro (colonne Telephone du classeur,
+            sinon numéro de démo +2376900000NN dérivé de l'ID M0NN) ; les comptes doivent exister.
+--membres : affiche « telephone<TAB>Prénom NOM » pour chaque membre, puis s'arrête (sert à créer les comptes).
 """
 import argparse
 import datetime as dt
@@ -52,6 +55,17 @@ def date_cell(v):
     return None
 
 
+def telephone(cellule, ref):
+    """Number from the workbook, else a demo number derived from the member ID (M001 -> +237690000001)."""
+    chiffres = "".join(c for c in str(cellule or "") if c.isdigit())
+    if len(chiffres) == 9:
+        return "+237" + chiffres
+    if len(chiffres) == 12 and chiffres.startswith("237"):
+        return "+" + chiffres
+    n = "".join(c for c in ref if c.isdigit())
+    return f"+237690000{int(n):03d}" if n else None
+
+
 def lire(path, unite):
     wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
 
@@ -69,7 +83,9 @@ def lire(path, unite):
             continue
         nom_complet = f"{str(nom).strip()} {str(prenom or '').strip()}".strip()
         membres[nom_complet.upper()] = {
-            "reference": str(ref), "nom": nom_complet,
+            "reference": str(ref), "nom": nom_complet, "telephone": telephone(row[4], str(ref)),
+            # Account display name, first name first: the app greets "Bonjour <first word>".
+            "nomCompte": f"{str(prenom or '').strip()} {str(nom).strip()}".strip(),
             "palier": (num(row[7]) or paliers[0] / unite) * unite,
             "dateAdhesion": (date_cell(row[6]) or dt.datetime(2000, 1, 1)).strftime("%Y-%m-%dT00:00:00"),
             "statut": row[9],
@@ -130,10 +146,16 @@ def main():
     ap.add_argument("--api", default="http://localhost:5243/api/v1")
     ap.add_argument("--tel", default="+237670000002")
     ap.add_argument("--mdp", default="Demo2026!")
+    ap.add_argument("--comptes", action="store_true")
+    ap.add_argument("--membres", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
     d = lire(a.classeur, a.unite)
+    if a.membres:
+        for m in d["membres"]:
+            print(f"{m['telephone']}\t{m['nomCompte']}")
+        return
     attendu = sum(m["palier"] for m in d["membres"]) * d["nombreEcheances"]
     total = sum(p["montant"] for p in d["paiements"])
     fcfa = lambda v: f"{v:,.0f}".replace(",", " ") + " FCFA"
@@ -151,7 +173,8 @@ def main():
     }, jeton)
     appel(a.api, "POST", f"/projets/{projet['id']}/ouvrir", {}, jeton)
     r = appel(a.api, "POST", f"/projets/{projet['id']}/import", {
-        "participants": [{k: m[k] for k in ("reference", "nom", "palier", "dateAdhesion")} for m in d["membres"]],
+        "participants": [{k: m[k] for k in ("reference", "nom", "palier", "dateAdhesion")}
+                         | ({"telephone": m["telephone"]} if a.comptes else {}) for m in d["membres"]],
         "paiements": d["paiements"],
     }, jeton)
     p = r["projet"]

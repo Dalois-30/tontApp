@@ -66,7 +66,7 @@ export interface ProjetDetails {
   regles: ReglesProjet;
   participants: Participant[];
   depenses: { id: string; libelle: string; montant: number; statut: string; proposeeLe: string }[];
-  paiements: { id: string; montant: number; statut: string; saisiLe: string; reference: string | null }[];
+  paiements: { id: string; participantId: string; montant: number; preuve: string; statut: string; saisiLe: string; reference: string | null; motif: string | null }[];
 }
 
 export interface ProjetApercu {

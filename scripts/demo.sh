@@ -2,6 +2,9 @@
 # Données et utilitaires de démonstration (environnement de dev uniquement).
 # Usage :
 #   scripts/demo.sh seed               crée les comptes et la tontine de démo
+#   DEMO_CLASSEUR=f.xlsx scripts/demo.sh seed
+#                                      à la place : l'association du classeur, un compte par membre
+#                                      (avec son historique) et le projet collectif importé
 #   scripts/demo.sh otp <telephone>    affiche le code OTP en cours (au lieu du SMS)
 #   scripts/demo.sh role <tel> <Role>  change le rôle d'un compte (Membre|Gestionnaire|Admin)
 set -euo pipefail
@@ -34,6 +37,17 @@ seed() {
   curl -sf "${API%/api/v1}/health" >/dev/null || { echo "API injoignable : lancez 'make api'"; exit 1; }
   echo "Comptes (mot de passe : $PASSWORD)" >&2
   compte +237670000001 "Admin TontApp"    Admin
+
+  # Association from a contributions workbook: one account per member, linked to their history.
+  if [ -n "${DEMO_CLASSEUR:-}" ]; then
+    compte +237670000002 "Gestionnaire PJLSV" Gestionnaire
+    python3 -I scripts/import_classeur.py "$DEMO_CLASSEUR" --membres | while IFS=$'\t' read -r tel nom; do
+      compte "$tel" "$nom" Membre
+    done
+    python3 -I scripts/import_classeur.py "$DEMO_CLASSEUR" --api "$API" --comptes
+    return
+  fi
+
   compte +237670000002 "Awa Traore"       Gestionnaire
   compte +237670000003 "Ibrahim Sawadogo" Membre
   compte +237670000004 "Mariam Kabore"    Membre
@@ -57,10 +71,6 @@ seed() {
     echo "Tontine de démo déjà présente : $t" >&2
   fi
 
-  # Optional: collective project imported from a contributions workbook.
-  if [ -n "${DEMO_CLASSEUR:-}" ]; then
-    python3 -I scripts/import_classeur.py "$DEMO_CLASSEUR" --api "$API"
-  fi
 }
 
 case "${1:-}" in

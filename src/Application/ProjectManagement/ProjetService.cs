@@ -1,6 +1,7 @@
 namespace Application.ProjectManagement;
 
 using Domain.Common;
+using Domain.IdentityManagement.Repositories;
 using Domain.IdentityManagement.ValueObjects;
 using Domain.ProjectManagement;
 using Domain.TontineManagement.ValueObjects;
@@ -70,7 +71,8 @@ public sealed record ParticipantSansCompteRequest(string Nom, decimal Palier, Da
 
 /// <summary>Bulk import from a previous register (Excel, notebook). References link payments to participants.</summary>
 public sealed record ImportProjetRequest(List<ImportParticipant> Participants, List<ImportPaiement> Paiements);
-public sealed record ImportParticipant(string Reference, string Nom, decimal Palier, DateTime DateAdhesion);
+/// <summary>A register line. <c>Telephone</c>, when it matches an account, links the participant to it.</summary>
+public sealed record ImportParticipant(string Reference, string Nom, decimal Palier, DateTime DateAdhesion, string? Telephone = null);
 public sealed record ImportPaiement(string Reference, decimal Montant, DateTime Date, string? Moyen);
 public sealed record ImportResultat(int Participants, int Paiements, decimal Montant, ProjetDetailsDto Projet);
 
@@ -86,11 +88,13 @@ public sealed class ProjetService
 {
     private readonly IProjetRepository _projets;
     private readonly IUnitOfWork _uow;
+    private readonly IUtilisateurRepository _utilisateurs;
 
-    public ProjetService(IProjetRepository projets, IUnitOfWork uow)
+    public ProjetService(IProjetRepository projets, IUnitOfWork uow, IUtilisateurRepository utilisateurs)
     {
         _projets = projets;
         _uow = uow;
+        _utilisateurs = utilisateurs;
     }
 
     private static DateTime Maintenant => DateTime.UtcNow;
@@ -258,7 +262,14 @@ public sealed class ProjetService
         foreach (var x in r.Participants)
         {
             var existant = p.Participants.FirstOrDefault(y => string.Equals(y.Nom, x.Nom.Trim(), StringComparison.OrdinalIgnoreCase));
-            refs[x.Reference] = existant?.Id ?? p.AjouterParticipant(x.Nom, x.Palier, DateTime.SpecifyKind(x.DateAdhesion, DateTimeKind.Utc), acteur).Id;
+            var pid = existant?.Id ?? p.AjouterParticipant(x.Nom, x.Palier, DateTime.SpecifyKind(x.DateAdhesion, DateTimeKind.Utc), acteur).Id;
+            refs[x.Reference] = pid;
+            if (!string.IsNullOrWhiteSpace(x.Telephone))
+            {
+                var compte = await _utilisateurs.GetByTelephoneAsync(x.Telephone.Trim(), ct)
+                    ?? throw new InvalidOperationException($"No account with phone number '{x.Telephone}' (participant '{x.Nom}').");
+                p.LierCompte(pid, compte.Id, acteur);
+            }
         }
         foreach (var x in r.Paiements.OrderBy(x => x.Date))
         {

@@ -173,6 +173,22 @@ public sealed class Projet : AggregateRoot<ProjetId>
     }
 
     /// <summary>
+    /// Links a participant registered without an account (paper/Excel register) to the account they
+    /// created since: they then see their instalments and payment history in the app.
+    /// </summary>
+    public void LierCompte(Guid participantId, UtilisateurId utilisateurId, string acteur)
+    {
+        var participant = Participant(participantId);
+        if (participant.UtilisateurId == utilisateurId) return;
+        if (participant.UtilisateurId is not null)
+            throw new InvalidOperationException("This participant is already linked to another account.");
+        if (_participants.Any(p => p.UtilisateurId == utilisateurId))
+            throw new InvalidOperationException("This user already participates in the project.");
+        participant.LierCompte(utilisateurId);
+        Journaliser("CompteLie", acteur, new { ParticipantId = participantId, UtilisateurId = utilisateurId.Value });
+    }
+
+    /// <summary>
     /// Imports a payment from a previous register (Excel, notebook): recorded as validated at its
     /// historical date, without the entry-time rules (partial/overpayment), and journaled as an import.
     /// </summary>

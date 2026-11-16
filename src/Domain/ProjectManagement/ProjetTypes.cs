@@ -70,6 +70,8 @@ public sealed class Participant : Entity<Guid>
         _changements.Add(new ChangementPalier(palier, DateTime.MinValue, StatutChangementPalier.Applique, maintenant, maintenant));
     }
 
+    internal void LierCompte(UtilisateurId utilisateurId) => UtilisateurId = utilisateurId;
+
     /// <summary>
     /// Tier of the instalment due on <paramref name="date"/> as of <paramref name="au"/>.
     /// A non-retroactive change only counts for instalments that had received no money before it took

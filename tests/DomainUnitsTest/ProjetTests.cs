@@ -369,4 +369,22 @@ public class ProjetTests
         Assert.Throws<InvalidOperationException>(() => p.ImporterPaiement(x.Id, 5_000m, Debut.AddDays(-30), "Cash", G));
         Assert.True(p.VerifierJournal());
     }
+
+    [Fact]
+    public void LierCompte_ImportedParticipantGetsTheirAccount_OnlyOnce()
+    {
+        var (p, _) = Nouveau();
+        var x = p.AjouterParticipant("BEMO Grace Merveille", 15_000m, Debut, G);
+        var y = p.AjouterParticipant("BOUNE TALLA Simplice", 15_000m, Debut, G);
+        var compte = UtilisateurId.Create();
+
+        p.LierCompte(x.Id, compte, G);
+        p.LierCompte(x.Id, compte, G); // idempotent
+
+        Assert.Equal(compte, x.UtilisateurId);
+        Assert.Throws<InvalidOperationException>(() => p.LierCompte(x.Id, UtilisateurId.Create(), G)); // already linked
+        Assert.Throws<InvalidOperationException>(() => p.LierCompte(y.Id, compte, G));                   // account already used
+        Assert.Single(p.Journal, j => j.Action == "CompteLie");
+        Assert.True(p.VerifierJournal());
+    }
 }

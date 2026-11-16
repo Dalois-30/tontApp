@@ -1,6 +1,6 @@
 /**
  * Collective project: progress to the goal, my commitment (tier, amount due, credit),
- * my instalments, tier change (raise applied, decrease pending approval), expenses.
+ * my instalments, my payment history, tier change (raise applied, decrease pending approval), expenses.
  */
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
@@ -22,6 +22,18 @@ const ECHEANCE: Record<Echeance['statut'], { label: string; color: string }> = {
   a_venir: { label: 'À venir', color: '#757575' },
 };
 
+const PAIEMENT: Record<string, { label: string; color: string }> = {
+  valide: { label: 'Validé', color: '#1B5E20' },
+  en_attente: { label: 'À valider', color: '#B26A00' },
+  rejete: { label: 'Rejeté', color: '#B71C1C' },
+};
+
+/** "Import du registre · OM" -> "OM" ; any other proof is shown as entered. */
+const moyen = (preuve: string) => preuve.replace(/^Import du registre · /, '');
+
+const dateLongue = (iso: string) =>
+  new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+
 const dateCourte = (iso: string) =>
   new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 
@@ -36,6 +48,9 @@ export function ProjetDetailScreen({ route }: Props): React.JSX.Element {
   useFocusEffect(useCallback(() => { void refetch(); }, [refetch]));
 
   const moi = p?.participants.find((x) => x.id === p.monParticipantId);
+  const [tousPaiements, setTousPaiements] = useState(false);
+  const mesPaiements = p && moi ? p.paiements.filter((x) => x.participantId === moi.id) : [];
+  const paiementsVisibles = tousPaiements ? mesPaiements : mesPaiements.slice(0, 8);
 
   const changerPalier = useCallback((palier: number) => {
     if (!p || !moi || palier === moi.palierActuel) return;
@@ -166,6 +181,29 @@ export function ProjetDetailScreen({ route }: Props): React.JSX.Element {
               </View>
             ))}
           </View>
+
+          <Text style={styles.section}>Mes paiements ({mesPaiements.length})</Text>
+          <View style={styles.card}>
+            {mesPaiements.length === 0 ? <Text style={styles.muted}>Aucun paiement enregistré pour le moment.</Text> : null}
+            {paiementsVisibles.map((x) => {
+              const st = PAIEMENT[x.statut] ?? PAIEMENT.en_attente;
+              return (
+                <View key={x.id} style={styles.paiement} accessibilityLabel={`${formatMontant(x.montant)} le ${dateLongue(x.saisiLe)}, ${st.label}`}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.strong}>{formatMontant(x.montant)}</Text>
+                    <Text style={styles.muted} numberOfLines={1}>{dateLongue(x.saisiLe)} · {moyen(x.preuve)}</Text>
+                    {x.statut === 'rejete' && x.motif ? <Text style={styles.due}>Motif : {x.motif}</Text> : null}
+                  </View>
+                  <Text style={[styles.echeanceStatut, { color: st.color }]}>{st.label}</Text>
+                </View>
+              );
+            })}
+            {mesPaiements.length > 8 ? (
+              <TouchableOpacity onPress={() => setTousPaiements((v) => !v)} accessibilityRole="button">
+                <Text style={styles.lien}>{tousPaiements ? 'Afficher moins' : `Afficher les ${mesPaiements.length} paiements`}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </>
       ) : (
         <>
@@ -218,6 +256,8 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.primary },
   chipText: { color: colors.primary, fontWeight: '600', fontSize: fontSizes.md },
   chipTextActive: { color: '#FFFFFF' },
+  paiement: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  lien: { color: colors.primary, fontWeight: '600', fontSize: fontSizes.md, paddingTop: spacing.xs },
   echeance: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 2 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   echeanceDate: { width: 70, fontSize: fontSizes.sm, color: colors.textPrimary },
