@@ -23,6 +23,7 @@ import { tontineService } from '../../services/tontineService';
 import { useAuthStore } from '../../store/authStore';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { Tuile } from '../../components/kit';
 import { ProgressBar } from '../../components/ProgressBar';
 import { MembreStatusBadge } from '../../components/MembreStatusBadge';
 import { CountdownTimer } from '../../components/CountdownTimer';
@@ -320,6 +321,15 @@ export function TontineDetailScreen({
         onPress={handleNavigateHistorique}
         style={styles.actionButton}
       />
+
+      <View style={{ marginTop: 24 }}>
+        <Tuile titre="Bureau et votes" sousTitre="Responsable, trésorier, votes en cours"
+          onPress={() => navigation.navigate('Gouvernance', { type: 'tontines', id: tontineId })} />
+        <Tuile titre="Rapports de séance" sousTitre="Comptes rendus et décisions des réunions"
+          onPress={() => navigation.navigate('Seances', { type: 'tontines', id: tontineId })} />
+        <Tuile titre="Historique des décisions" sousTitre="Rôles, votes et séances de la tontine"
+          onPress={() => navigation.navigate('Chronologie', { type: 'tontines', id: tontineId })} />
+      </View>
     </ScrollView>
   );
 }

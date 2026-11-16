@@ -189,6 +189,22 @@ public sealed class Projet : AggregateRoot<ProjetId>
     }
 
     /// <summary>
+    /// Changes a participant's standing (suspended, resigned, excluded...). Only active participants
+    /// vote; the history and what they owe are kept.
+    /// </summary>
+    public void ChangerStatutParticipant(Guid participantId, StatutParticipant statut, string? motif, string acteur)
+    {
+        var participant = Participant(participantId);
+        if (participant.Statut == statut) return;
+        var ancien = participant.Statut;
+        participant.DefinirStatut(statut);
+        Journaliser("StatutParticipantChange", acteur, new { ParticipantId = participantId, Ancien = ancien.ToString(), Nouveau = statut.ToString(), Motif = motif });
+    }
+
+    /// <summary>Register data that is not a business decision (not journaled).</summary>
+    public void RenseignerSexe(Guid participantId, string? sexe) => Participant(participantId).DefinirSexe(sexe);
+
+    /// <summary>
     /// Imports a payment from a previous register (Excel, notebook): recorded as validated at its
     /// historical date, without the entry-time rules (partial/overpayment), and journaled as an import.
     /// </summary>

@@ -7,7 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 
 /// <summary>
 /// Collective projects: tiers (paliers), instalments, payments, expenses and balance.
-/// Roles are per project: its gestionnaire manages it; participants read it and manage their own tier.
+/// Rights follow the project's bureau: the responsable runs it, the trésorier validates, each
+/// participant declares their own payments and manages their tier; every member reads everything.
 /// </summary>
 [ApiController]
 [Route("api/v1/projets")]
@@ -96,7 +97,12 @@ public class ProjetController : ControllerBase
 
     [HttpPost("{id:guid}/paiements")]
     public Task<IActionResult> EnregistrerPaiement(Guid id, [FromBody] PaiementProjetRequest r, CancellationToken ct) =>
-        Run(() => _service.EnregistrerPaiementAsync(id, r.ParticipantId, r.Montant, r.Preuve ?? "", UserId, Admin, ct));
+        Run(() => _service.EnregistrerPaiementAsync(id, r.ParticipantId, r.Montant, r.Preuve ?? "", r.Moyen, UserId, Admin, ct));
+
+    /// <summary>Change a participant's standing: Actif, Suspendu, Demissionnaire, Exclu (responsable).</summary>
+    [HttpPut("{id:guid}/participants/{participantId:guid}/statut")]
+    public Task<IActionResult> ChangerStatut(Guid id, Guid participantId, [FromBody] StatutParticipantRequest r, CancellationToken ct) =>
+        Run(() => _service.ChangerStatutParticipantAsync(id, participantId, r, UserId, Admin, ct));
 
     [HttpPost("{id:guid}/paiements/{paiementId:guid}/{decision:regex(^(valider|rejeter)$)}")]
     public Task<IActionResult> DeciderPaiement(Guid id, Guid paiementId, string decision, [FromBody] MotifRequest? r, CancellationToken ct) =>
@@ -113,6 +119,7 @@ public class ProjetController : ControllerBase
 
 public sealed record RejoindreProjetRequest(string Code, string Nom, decimal Palier);
 public sealed record ChangerPalierRequest(decimal Palier);
-public sealed record PaiementProjetRequest(Guid ParticipantId, decimal Montant, string? Preuve);
+/// <summary>ParticipantId omitted: the caller declares their own payment.</summary>
+public sealed record PaiementProjetRequest(Guid? ParticipantId, decimal Montant, string? Preuve, string? Moyen = null);
 public sealed record DepenseRequest(string Libelle, decimal Montant, string? Justificatif);
 public sealed record MotifRequest(string? Motif);

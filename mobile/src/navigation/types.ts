@@ -23,4 +23,14 @@ export type AppStackParamList = {
   Notifications: undefined;
   ProjetDetail: { projetId: string };
   RejoindreProjet: undefined;
+  ProjetMembres: { projetId: string };
+  ProjetMembre: { projetId: string; participantId: string };
+  ProjetPaiements: { projetId: string };
+  DeclarerPaiement: { projetId: string };
+  ProjetValidations: { projetId: string };
+  ProjetDepenses: { projetId: string };
+  Gouvernance: { type: 'projets' | 'tontines'; id: string };
+  Seances: { type: 'projets' | 'tontines'; id: string };
+  SeanceForm: { type: 'projets' | 'tontines'; id: string };
+  Chronologie: { type: 'projets' | 'tontines'; id: string; participantId?: string; titre?: string };
 };

@@ -45,7 +45,46 @@ export interface Participant {
   resteDuExigible: number;
   avance: number;
   echeances: Echeance[] | null;
+  dateAdhesion: string;
+  utilisateurId: string | null;
+  statut: 'Actif' | 'Suspendu' | 'Demissionnaire' | 'Exclu';
+  sexe: string | null;
 }
+
+export interface PaiementProjet {
+  id: string;
+  participantId: string;
+  participantNom: string;
+  montant: number;
+  preuve: string;
+  statut: 'valide' | 'en_attente' | 'rejete';
+  saisiLe: string;
+  decideLe: string | null;
+  reference: string | null;
+  motif: string | null;
+  saisiParNom: string | null;
+  decideParNom: string | null;
+}
+
+export interface DepenseProjet {
+  id: string;
+  libelle: string;
+  montant: number;
+  justificatif: string;
+  statut: 'valide' | 'en_attente' | 'rejete';
+  proposeeLe: string;
+  decideeLe: string | null;
+  motif: string | null;
+}
+
+export interface Bureau {
+  responsableId: string;
+  responsableNom: string;
+  tresorierId: string;
+  tresorierNom: string;
+}
+
+export type RoleGroupe = 'responsable' | 'tresorier' | 'participant' | 'admin';
 
 export interface ProjetDetails {
   id: string;
@@ -65,8 +104,11 @@ export interface ProjetDetails {
   progression: number;
   regles: ReglesProjet;
   participants: Participant[];
-  depenses: { id: string; libelle: string; montant: number; statut: string; proposeeLe: string }[];
-  paiements: { id: string; participantId: string; montant: number; preuve: string; statut: string; saisiLe: string; reference: string | null; motif: string | null }[];
+  depenses: DepenseProjet[];
+  paiements: PaiementProjet[];
+  bureau: Bureau;
+  mesRoles: RoleGroupe[];
+  journalValide: boolean;
 }
 
 export interface ProjetApercu {
@@ -97,6 +139,25 @@ export const projetService = {
   /** Applied right away or waiting for the gestionnaire's approval, per the project's rules. */
   async changerMonPalier(id: string, palier: number): Promise<'applique' | 'en_attente_validation'> {
     return (await apiClient.put<{ statut: 'applique' | 'en_attente_validation' }>(`/projets/${id}/mon-palier`, { palier })).data.statut;
+  },
+  /** Without participantId: the caller declares their own payment (pending the treasurer's validation). */
+  async declarerPaiement(id: string, p: { montant: number; moyen: string; preuve?: string; participantId?: string }): Promise<ProjetDetails> {
+    return (await apiClient.post<ProjetDetails>(`/projets/${id}/paiements`, p)).data;
+  },
+  async deciderPaiement(id: string, paiementId: string, valider: boolean, motif?: string): Promise<ProjetDetails> {
+    return (await apiClient.post<ProjetDetails>(`/projets/${id}/paiements/${paiementId}/${valider ? 'valider' : 'rejeter'}`, { motif })).data;
+  },
+  async deciderPalier(id: string, participantId: string, approuver: boolean): Promise<ProjetDetails> {
+    return (await apiClient.post<ProjetDetails>(`/projets/${id}/participants/${participantId}/changement-palier/${approuver ? 'approuver' : 'refuser'}`)).data;
+  },
+  async proposerDepense(id: string, d: { libelle: string; montant: number; justificatif: string }): Promise<ProjetDetails> {
+    return (await apiClient.post<ProjetDetails>(`/projets/${id}/depenses`, d)).data;
+  },
+  async deciderDepense(id: string, depenseId: string, valider: boolean, motif?: string): Promise<ProjetDetails> {
+    return (await apiClient.post<ProjetDetails>(`/projets/${id}/depenses/${depenseId}/${valider ? 'valider' : 'rejeter'}`, { motif })).data;
+  },
+  async changerStatut(id: string, participantId: string, statut: Participant['statut'], motif?: string): Promise<ProjetDetails> {
+    return (await apiClient.put<ProjetDetails>(`/projets/${id}/participants/${participantId}/statut`, { statut, motif })).data;
   },
 } as const;
 

@@ -77,6 +77,9 @@ internal sealed class ParticipantConfiguration : IEntityTypeConfiguration<Partic
         b.Property(p => p.UtilisateurId).HasColumnName("utilisateur_id")
             .HasConversion(id => id != null ? id.Value : (Guid?)null, v => v.HasValue ? UtilisateurId.From(v.Value) : null);
         b.Property(p => p.DateAdhesion).HasColumnName("date_adhesion");
+        b.Property(p => p.Statut).HasColumnName("statut").HasMaxLength(20)
+            .HasConversion(v => v.ToString(), v => Enum.Parse<StatutParticipant>(v)).HasDefaultValue(StatutParticipant.Actif);
+        b.Property(p => p.Sexe).HasColumnName("sexe").HasMaxLength(1);
         b.Ignore(p => p.ChangementEnAttente);
         b.HasMany(p => p.Changements).WithOne().HasForeignKey("participant_id").OnDelete(DeleteBehavior.Cascade);
         b.Navigation(p => p.Changements).UsePropertyAccessMode(PropertyAccessMode.Field);

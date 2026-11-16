@@ -49,6 +49,9 @@ public enum StatutChangementPalier { Applique, EnAttente, Refuse }
 
 public enum StatutEcheance { Soldee, Partielle, EnRetard, AVenir }
 
+/// <summary>Standing of a participant in the association (from the members register).</summary>
+public enum StatutParticipant { Actif, Suspendu, Demissionnaire, Exclu }
+
 /// <summary>Member of a collective project, committed to a contribution tier (palier).</summary>
 public sealed class Participant : Entity<Guid>
 {
@@ -57,6 +60,9 @@ public sealed class Participant : Entity<Guid>
     public string Nom { get; private set; } = string.Empty;
     public UtilisateurId? UtilisateurId { get; private set; }
     public DateTime DateAdhesion { get; private set; }
+    public StatutParticipant Statut { get; private set; } = StatutParticipant.Actif;
+    /// <summary>"F" or "M" when known (members register).</summary>
+    public string? Sexe { get; private set; }
     public IReadOnlyCollection<ChangementPalier> Changements => _changements.AsReadOnly();
 
     private Participant() { }
@@ -71,6 +77,9 @@ public sealed class Participant : Entity<Guid>
     }
 
     internal void LierCompte(UtilisateurId utilisateurId) => UtilisateurId = utilisateurId;
+    internal void DefinirStatut(StatutParticipant statut) => Statut = statut;
+    internal void DefinirSexe(string? sexe) =>
+        Sexe = sexe?.Trim().ToUpperInvariant() switch { "F" => "F", "M" => "M", _ => null };
 
     /// <summary>
     /// Tier of the instalment due on <paramref name="date"/> as of <paramref name="au"/>.

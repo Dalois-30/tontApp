@@ -274,6 +274,268 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("profils_credit", (string)null);
                 });
 
+            modelBuilder.Entity("Domain.Gouvernance.Bulletin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("Le")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("le");
+
+                    b.Property<bool>("Pour")
+                        .HasColumnType("boolean")
+                        .HasColumnName("pour");
+
+                    b.Property<Guid>("UtilisateurId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("utilisateur_id");
+
+                    b.Property<Guid?>("vote_id")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("vote_id");
+
+                    b.ToTable("bulletins", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Gouvernance.Bureau", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("groupe_id");
+
+                    b.Property<Guid>("ResponsableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("responsable_id");
+
+                    b.Property<Guid>("TresorierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tresorier_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type_groupe");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Regles", "Domain.Gouvernance.Bureau.Regles#ReglesGouvernance", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<int>("DureeVoteJours")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer")
+                                .HasDefaultValue(7)
+                                .HasColumnName("regle_duree_vote_jours");
+
+                            b1.Property<string>("ModeVote")
+                                .IsRequired()
+                                .ValueGeneratedOnAdd()
+                                .HasMaxLength(30)
+                                .HasColumnType("character varying(30)")
+                                .HasDefaultValue("MajoriteDesVotants")
+                                .HasColumnName("regle_mode_vote");
+
+                            b1.Property<int>("QuorumPourcent")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer")
+                                .HasDefaultValue(50)
+                                .HasColumnName("regle_quorum_pourcent");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ResponsableId");
+
+                    b.HasIndex("TresorierId");
+
+                    b.ToTable("bureaux", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Gouvernance.JournalBureau", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Acteur")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("acteur");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("action");
+
+                    b.Property<string>("HashCourant")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("hash_courant");
+
+                    b.Property<string>("HashPrecedent")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("hash_precedent");
+
+                    b.Property<DateTime>("Horodatage")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("horodatage");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payload");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid?>("groupe_id")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Sequence");
+
+                    b.HasIndex("groupe_id");
+
+                    b.ToTable("journal_bureau", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Gouvernance.Seance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AuteurId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("auteur_id");
+
+                    b.Property<string>("CompteRendu")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)")
+                        .HasColumnName("compte_rendu");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("date");
+
+                    b.PrimitiveCollection<List<string>>("Decisions")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("decisions");
+
+                    b.Property<string>("Lieu")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("lieu");
+
+                    b.Property<string>("OrdreDuJour")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("ordre_du_jour");
+
+                    b.PrimitiveCollection<List<string>>("Presents")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("presents");
+
+                    b.Property<DateTime>("RedigeeLe")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("redigee_le");
+
+                    b.Property<string>("Titre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("titre");
+
+                    b.Property<Guid?>("groupe_id")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date");
+
+                    b.HasIndex("groupe_id");
+
+                    b.ToTable("seances", (string)null);
+                });
+
+            modelBuilder.Entity("Domain.Gouvernance.Vote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CandidatId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("candidat_id");
+
+                    b.Property<DateTime?>("ClosLe")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("clos_le");
+
+                    b.PrimitiveCollection<List<Guid>>("Electeurs")
+                        .IsRequired()
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("electeurs");
+
+                    b.Property<DateTime>("FermeLe")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ferme_le");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("mode");
+
+                    b.Property<string>("Objet")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("objet");
+
+                    b.Property<DateTime>("OuvertLe")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ouvert_le");
+
+                    b.Property<Guid>("ProposeParId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("propose_par_id");
+
+                    b.Property<int>("QuorumPourcent")
+                        .HasColumnType("integer")
+                        .HasColumnName("quorum_pourcent");
+
+                    b.Property<string>("Statut")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("statut");
+
+                    b.Property<Guid?>("groupe_id")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("groupe_id");
+
+                    b.ToTable("votes", (string)null);
+                });
+
             modelBuilder.Entity("Domain.IdentityManagement.Utilisateur", b =>
                 {
                     b.Property<Guid>("Id")
@@ -767,6 +1029,19 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("nom");
 
+                    b.Property<string>("Sexe")
+                        .HasMaxLength(1)
+                        .HasColumnType("character varying(1)")
+                        .HasColumnName("sexe");
+
+                    b.Property<string>("Statut")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Actif")
+                        .HasColumnName("statut");
+
                     b.Property<Guid?>("UtilisateurId")
                         .HasColumnType("uuid")
                         .HasColumnName("utilisateur_id");
@@ -1181,6 +1456,38 @@ namespace Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Domain.Gouvernance.Bulletin", b =>
+                {
+                    b.HasOne("Domain.Gouvernance.Vote", null)
+                        .WithMany("Bulletins")
+                        .HasForeignKey("vote_id")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Domain.Gouvernance.JournalBureau", b =>
+                {
+                    b.HasOne("Domain.Gouvernance.Bureau", null)
+                        .WithMany("Journal")
+                        .HasForeignKey("groupe_id")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Domain.Gouvernance.Seance", b =>
+                {
+                    b.HasOne("Domain.Gouvernance.Bureau", null)
+                        .WithMany("Seances")
+                        .HasForeignKey("groupe_id")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Domain.Gouvernance.Vote", b =>
+                {
+                    b.HasOne("Domain.Gouvernance.Bureau", null)
+                        .WithMany("Votes")
+                        .HasForeignKey("groupe_id")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
             modelBuilder.Entity("Domain.NotificationManagement.Notification", b =>
                 {
                     b.OwnsOne("Domain.NotificationManagement.ValueObjects.ContenuMessage", "ContenuMessage", b1 =>
@@ -1373,6 +1680,20 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.Navigation("Reglement")
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Domain.Gouvernance.Bureau", b =>
+                {
+                    b.Navigation("Journal");
+
+                    b.Navigation("Seances");
+
+                    b.Navigation("Votes");
+                });
+
+            modelBuilder.Entity("Domain.Gouvernance.Vote", b =>
+                {
+                    b.Navigation("Bulletins");
                 });
 
             modelBuilder.Entity("Domain.PaymentManagement.Versement", b =>

@@ -88,7 +88,8 @@ def lire(path, unite):
             "nomCompte": f"{str(prenom or '').strip()} {str(nom).strip()}".strip(),
             "palier": (num(row[7]) or paliers[0] / unite) * unite,
             "dateAdhesion": (date_cell(row[6]) or dt.datetime(2000, 1, 1)).strftime("%Y-%m-%dT00:00:00"),
-            "statut": row[9],
+            "statut": str(row[9]).strip() if row[9] else None,
+            "sexe": str(row[3]).strip() if row[3] else None,
         }
 
     paiements, mois_couverts = [], []
@@ -173,7 +174,7 @@ def main():
     }, jeton)
     appel(a.api, "POST", f"/projets/{projet['id']}/ouvrir", {}, jeton)
     r = appel(a.api, "POST", f"/projets/{projet['id']}/import", {
-        "participants": [{k: m[k] for k in ("reference", "nom", "palier", "dateAdhesion")}
+        "participants": [{k: m[k] for k in ("reference", "nom", "palier", "dateAdhesion", "sexe", "statut")}
                          | ({"telephone": m["telephone"]} if a.comptes else {}) for m in d["membres"]],
         "paiements": d["paiements"],
     }, jeton)

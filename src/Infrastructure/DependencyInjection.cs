@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<ITontineRepository, TontineRepository>();
         services.AddScoped<IVersementRepository, VersementRepository>();
         services.AddScoped<Domain.ProjectManagement.IProjetRepository, ProjetRepository>();
+        services.AddScoped<Domain.Gouvernance.IBureauRepository, BureauRepository>();
         services.AddScoped<IAuditEntryRepository, AuditEntryRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IUtilisateurRepository, UtilisateurRepository>();

@@ -18,6 +18,16 @@ import { HistoriqueVersementsScreen } from '../screens/app/HistoriqueVersementsS
 import { NotificationsScreen } from '../screens/app/NotificationsScreen';
 import { ProjetDetailScreen } from '../screens/app/ProjetDetailScreen';
 import { RejoindreProjetScreen } from '../screens/app/RejoindreProjetScreen';
+import { ProjetMembresScreen } from '../screens/app/projet/ProjetMembresScreen';
+import { ProjetMembreScreen } from '../screens/app/projet/ProjetMembreScreen';
+import { ProjetPaiementsScreen } from '../screens/app/projet/ProjetPaiementsScreen';
+import { DeclarerPaiementScreen } from '../screens/app/projet/DeclarerPaiementScreen';
+import { ProjetValidationsScreen } from '../screens/app/projet/ProjetValidationsScreen';
+import { ProjetDepensesScreen } from '../screens/app/projet/ProjetDepensesScreen';
+import { GouvernanceScreen } from '../screens/app/groupe/GouvernanceScreen';
+import { SeancesScreen } from '../screens/app/groupe/SeancesScreen';
+import { SeanceFormScreen } from '../screens/app/groupe/SeanceFormScreen';
+import { ChronologieScreen } from '../screens/app/groupe/ChronologieScreen';
 import type { AppStackParamList } from './types';
 import { colors } from '../config/theme';
 
@@ -50,6 +60,16 @@ export function AppStack(): React.JSX.Element {
         component={RejoindreProjetScreen}
         options={{ title: 'Rejoindre un projet' }}
       />
+      <Stack.Screen name="ProjetMembres" component={ProjetMembresScreen} options={{ title: 'Membres et cotisations' }} />
+      <Stack.Screen name="ProjetMembre" component={ProjetMembreScreen} options={{ title: 'Fiche du membre' }} />
+      <Stack.Screen name="ProjetPaiements" component={ProjetPaiementsScreen} options={{ title: 'Tous les paiements' }} />
+      <Stack.Screen name="DeclarerPaiement" component={DeclarerPaiementScreen} options={{ title: 'Déclarer un paiement' }} />
+      <Stack.Screen name="ProjetValidations" component={ProjetValidationsScreen} options={{ title: 'À valider' }} />
+      <Stack.Screen name="ProjetDepenses" component={ProjetDepensesScreen} options={{ title: 'Dépenses' }} />
+      <Stack.Screen name="Gouvernance" component={GouvernanceScreen} options={{ title: 'Bureau et votes' }} />
+      <Stack.Screen name="Seances" component={SeancesScreen} options={{ title: 'Rapports de séance' }} />
+      <Stack.Screen name="SeanceForm" component={SeanceFormScreen} options={{ title: 'Nouveau rapport' }} />
+      <Stack.Screen name="Chronologie" component={ChronologieScreen} options={{ title: 'Historique' }} />
       <Stack.Screen
         name="TontineDetail"
         component={TontineDetailScreen}
