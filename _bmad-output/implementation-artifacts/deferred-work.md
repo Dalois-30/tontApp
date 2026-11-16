@@ -24,3 +24,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-paiement-partiel-tontine.md`
   summary: Aligner GET /tontines/{id}/tours/actuel sur la règle par montants (partiel ≠ payé).
   evidence: GetTourActuelQueryHandler compte tout versement confirmé comme payé ; aucun écran ne l'utilise aujourd'hui.
+- source_spec: `_bmad-output/implementation-artifacts/spec-tableau-de-bord-bureau.md`
+  summary: Sélecteur de tontine sur le web pour qui siège au bureau de plusieurs tontines (pages, paiements, audit transmettent tontineId).
+  evidence: Seule la tontine par défaut est atteignable depuis le web ; l'API accepte déjà tontineId.

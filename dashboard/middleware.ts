@@ -45,13 +45,8 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (
-      pathname.startsWith("/gestionnaire") &&
-      role !== "Gestionnaire" &&
-      role !== "Admin"
-    ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // /gestionnaire is the bureau's space (responsable, trésorier): the platform role does not
+    // tell who sits on a bureau, so any authenticated account gets in and the API decides per tontine.
 
     // Forward user info via headers for SSR components
     const response = NextResponse.next();

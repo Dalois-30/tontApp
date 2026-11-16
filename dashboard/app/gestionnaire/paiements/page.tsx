@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { formatMontant, formatDate, resteTourOuvert, doitSurLeTour, libelleStatutMembre } from "@/lib/format";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { formatMontant, formatDate, resteTourOuvert, doitSurLeTour, libelleStatutMembre, peutValider, libelleRolesBureau, MESSAGE_HORS_BUREAU } from "@/lib/format";
 import type { TontineDto, VersementDto } from "@/lib/types";
 import { Badge, Card, EmptyState, Icon, PageHeader } from "@/components/ui";
 import Pagination from "@/components/Pagination";
@@ -9,6 +9,9 @@ import Pagination from "@/components/Pagination";
 interface PaiementsResponse { items: VersementDto[]; totalCount: number; page: number; pageSize: number; totalPages: number }
 
 type Filtre = "tous" | "en_attente" | "confirme" | "rejete";
+
+/** Outcome of the last load of the tontine: 403 → hors_bureau, 404 → aucune, other failure → erreur. */
+type Etat = "chargement" | "ok" | "hors_bureau" | "aucune" | "erreur";
 
 export default function PaiementsPage() {
   const [paiements, setPaiements] = useState<VersementDto[]>([]);
@@ -19,6 +22,9 @@ export default function PaiementsPage() {
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [filtre, setFiltre] = useState<Filtre>("tous");
+  const [etat, setEtat] = useState<Etat>("chargement");
+  // Once known, the tontine is pinned so that it and its payments always come from the same tontine.
+  const tontineId = useRef<string | null>(null);
 
   const [membreId, setMembreId] = useState("");
   const [tourId, setTourId] = useState("");
@@ -32,17 +38,25 @@ export default function PaiementsPage() {
   const fetchAll = useCallback(async (p: number) => {
     setLoading(true);
     try {
-      const [resP, resT] = await Promise.all([fetch(`/api/paiements?page=${p}&pageSize=${pageSize}`), fetch(`/api/tontine`)]);
-      if (resP.ok) {
-        const data: PaiementsResponse = await resP.json();
-        setPaiements(data.items ?? []);
-        setTotalPages(data.totalPages);
+      // The tontine first, then the payments of that very tontine.
+      const resT = await fetch(tontineId.current ? `/api/tontine?tontineId=${tontineId.current}` : "/api/tontine");
+      if (!resT.ok) {
+        setEtat(resT.status === 403 ? "hors_bureau" : resT.status === 404 ? "aucune" : "erreur");
+        return;
       }
-      if (resT.ok) {
-        const t: TontineDto = await resT.json();
-        setTontine(t);
-        setMontant((m) => m || String(t.montantCotisation));
-      }
+      const t: TontineDto = await resT.json();
+      tontineId.current = t.id;
+      setTontine(t);
+      setMontant((m) => m || String(t.montantCotisation));
+
+      const resP = await fetch(`/api/paiements?page=${p}&pageSize=${pageSize}&tontineId=${t.id}`);
+      if (!resP.ok) { setEtat("erreur"); return; }
+      const data: PaiementsResponse = await resP.json();
+      setPaiements(data.items ?? []);
+      setTotalPages(data.totalPages);
+      setEtat("ok");
+    } catch {
+      setEtat("erreur");
     } finally {
       setLoading(false);
     }
@@ -99,7 +113,7 @@ export default function PaiementsPage() {
     const data = await res.json().catch(() => ({}));
     setBusy(null);
     if (res.ok) {
-      setMessage({ type: "ok", text: `Paiement de ${membreChoisi?.nom} enregistré. Il attend votre validation ci-dessous.` });
+      setMessage({ type: "ok", text: `Paiement de ${membreChoisi?.nom} enregistré. Il attend ${valide ? "votre validation ci-dessous" : "la validation du trésorier"}.` });
       setMembreId(""); setTourId(""); setPreuve(""); setFiltre("tous");
       fetchAll(page);
     } else {
@@ -126,13 +140,35 @@ export default function PaiementsPage() {
     }
   }
 
+  // Validating is the trésorier's (or an admin's); the API refuses anyone else.
+  const valide = peutValider(tontine);
+  const roles = libelleRolesBureau(tontine);
   const aValider = paiements.filter((p) => p.status === "en_attente").length;
+
+  if (etat === "hors_bureau" || etat === "aucune" || etat === "erreur") {
+    const [icone, titre, texte] = etat === "hors_bureau"
+      ? ["shield", "Vous n'êtes au bureau d'aucune tontine", MESSAGE_HORS_BUREAU]
+      : etat === "aucune"
+        ? ["users", "Aucune tontine pour le moment", "Créez votre tontine depuis l'application mobile : ses paiements apparaîtront ici."]
+        : ["alert", "Impossible de charger les paiements", "Le serveur n'a pas répondu correctement. Réessayez dans un instant."];
+    return (
+      <>
+        <PageHeader eyebrow="Espace du bureau" title="Paiements" />
+        <div className="card"><EmptyState icon={icone} title={titre}>{texte}</EmptyState></div>
+      </>
+    );
+  }
+  // Role-dependent wording only once the tontine (and so the caller's roles) is known.
+  const pret = etat === "ok";
   const visibles = filtre === "tous" ? paiements : paiements.filter((p) => p.status === filtre);
 
   return (
     <>
       <PageHeader eyebrow="Tontine" title="Paiements"
-        subtitle="Enregistrez les cotisations remises en espèces, puis validez-les après avoir vérifié la preuve. Saisie et validation sont deux étapes tracées dans le journal." />
+        badge={pret && roles ? <span data-testid="role-bureau" className="inline-flex items-center rounded-full h-6 px-2.5 text-[12px] font-medium bg-brand-soft text-brand">Vous : {roles}</span> : undefined}
+        subtitle={!pret ? undefined : valide
+          ? "Enregistrez les cotisations remises en espèces, puis validez-les après avoir vérifié la preuve. Saisie et validation sont deux étapes tracées dans le journal."
+          : "Enregistrez les cotisations remises en espèces. Le trésorier de la tontine les valide après avoir vérifié la preuve ; chaque étape est tracée dans le journal."} />
 
       {message && <div data-testid="message" role="status" className={message.type === "ok" ? "notice-ok" : "notice-err"}>{message.text}</div>}
 
@@ -176,7 +212,7 @@ export default function PaiementsPage() {
       </Card>
 
       <Card title="Historique des paiements"
-        subtitle={aValider > 0 ? `${aValider} paiement(s) attendent votre validation.` : "Tous les paiements saisis ont été traités."}
+        subtitle={!pret ? undefined : aValider > 0 ? `${aValider} paiement(s) attendent ${valide ? "votre validation" : "la validation du trésorier"}.` : "Tous les paiements saisis ont été traités."}
         actions={
           <div className="inline-flex rounded-lg border border-line p-0.5 bg-surface-2" role="tablist" aria-label="Filtrer par statut">
             {([["tous", "Tous"], ["en_attente", "À valider"], ["confirme", "Validés"], ["rejete", "Rejetés"]] as [Filtre, string][]).map(([k, l]) => (
@@ -214,7 +250,7 @@ export default function PaiementsPage() {
                     <td className="text-[12px] text-muted font-mono">{p.reference ?? "—"}</td>
                     <td className="text-ink-2 whitespace-nowrap">{formatDate(p.dateCreation)}</td>
                     <td className="text-right whitespace-nowrap">
-                      {p.status === "en_attente" && (
+                      {valide && p.status === "en_attente" && (
                         <span className="inline-flex gap-2">
                           <button onClick={() => setRejet({ id: p.id, nom: p.payeurNom })} disabled={busy === p.id} className="btn-secondary btn-sm">Rejeter</button>
                           <button onClick={() => agir(p.id, "valider")} disabled={busy === p.id} className="btn-primary btn-sm"><Icon name="check" className="h-3.5 w-3.5" />Valider</button>

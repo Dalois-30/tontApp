@@ -13,7 +13,11 @@ export interface TontineDto {
   createdAt: string;
   adhesionEnCours?: "Interdite" | "AvecValidation" | "Libre";
   rattrapageAdhesionTardive?: boolean;
+  /** Roles of the caller on this tontine (bureau's dashboard only) */
+  mesRoles?: RoleBureau[];
 }
+
+export type RoleBureau = "responsable" | "tresorier" | "admin";
 
 export interface MembreDto {
   id: string;

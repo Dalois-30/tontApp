@@ -381,4 +381,12 @@ public interface IBureauRepository
 {
     Task<Bureau?> GetAsync(Guid groupeId, CancellationToken cancellationToken = default);
     Task AddAsync(Bureau bureau, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ids of the groups of the given type where the user is responsable or trésorier at
+    /// <paramref name="maintenant"/> (effective roles: a vote past its deadline counts, see
+    /// <see cref="Bureau.RolesEffectifs"/>). Read-only. Groups without a bureau yet are not listed.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetGroupesOuSiegeAsync(Guid utilisateurId, TypeGroupe type, DateTime maintenant,
+        CancellationToken cancellationToken = default);
 }

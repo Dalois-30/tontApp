@@ -41,6 +41,9 @@ public interface ITontineAccessService
 {
     Task<AccesTontine> GetAccesAsync(Guid tontineId, Guid utilisateurId, CancellationToken cancellationToken = default);
 
+    /// <summary>Same as <see cref="GetAccesAsync(Guid, Guid, CancellationToken)"/>, with the roles taken at <paramref name="maintenant"/>.</summary>
+    Task<AccesTontine> GetAccesAsync(Guid tontineId, Guid utilisateurId, DateTime maintenant, CancellationToken cancellationToken = default);
+
     /// <summary>Same as <see cref="GetAccesAsync"/> but starting from a versement id.</summary>
     Task<AccesTontine?> GetAccesParVersementAsync(Guid versementId, Guid utilisateurId, CancellationToken cancellationToken = default);
 }
@@ -59,8 +62,12 @@ public sealed class TontineAccessService : ITontineAccessService
         _bureauRepository = bureauRepository;
     }
 
+    public Task<AccesTontine> GetAccesAsync(
+        Guid tontineId, Guid utilisateurId, CancellationToken cancellationToken = default) =>
+        GetAccesAsync(tontineId, utilisateurId, DateTime.UtcNow, cancellationToken);
+
     public async Task<AccesTontine> GetAccesAsync(
-        Guid tontineId, Guid utilisateurId, CancellationToken cancellationToken = default)
+        Guid tontineId, Guid utilisateurId, DateTime maintenant, CancellationToken cancellationToken = default)
     {
         var tontine = await _tontineRepository.GetByIdReadOnlyAsync(TontineId.From(tontineId), cancellationToken);
         if (tontine is null)
@@ -72,7 +79,7 @@ public sealed class TontineAccessService : ITontineAccessService
         // Same rule as GouvernanceService: no bureau yet means the creator holds both roles.
         var bureau = await _bureauRepository.GetAsync(tontineId, cancellationToken);
         // A vote past its deadline changes the roles now, without modifying the bureau (read-only check).
-        var roles = bureau?.RolesEffectifs(DateTime.UtcNow);
+        var roles = bureau?.RolesEffectifs(maintenant);
         var responsable = roles?.ResponsableId ?? tontine.GestionnaireId.Value;
         var tresorier = roles?.TresorierId ?? tontine.GestionnaireId.Value;
         var estTresorier = tresorier == utilisateurId;

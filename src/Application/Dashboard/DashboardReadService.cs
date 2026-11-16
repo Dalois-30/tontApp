@@ -2,6 +2,8 @@ namespace Application.Dashboard;
 
 using Application.NotificationManagement.Services;
 using Application.PaymentManagement.Services;
+using Application.TontineManagement.Services;
+using Domain.Gouvernance;
 using Domain.IdentityManagement.Repositories;
 using Domain.IdentityManagement.ValueObjects;
 using Domain.NotificationManagement.Repositories;
@@ -20,8 +22,12 @@ using Domain.TontineManagement.ValueObjects;
 /// </summary>
 public interface IDashboardReadService
 {
-    /// <summary>Tontine shown on the gestionnaire dashboard: the requested one, else the most recent active one, else the most recent.</summary>
-    Task<DashTontineDto?> GetTontineGestionnaireAsync(Guid gestionnaireId, Guid? tontineId, CancellationToken ct = default);
+    /// <summary>
+    /// Tontine shown on the bureau's dashboard, with the caller's roles (<see cref="DashTontineDto.MesRoles"/>):
+    /// the requested one (access is checked by the caller), else among the tontines where the caller is
+    /// responsable or trésorier, the most recent active one, else the most recent. Null when there is none.
+    /// </summary>
+    Task<DashTontineDto?> GetTontineGestionnaireAsync(Guid utilisateurId, Guid? tontineId, bool admin, CancellationToken ct = default);
     Task<DashTontineDto?> GetTontineAsync(Guid tontineId, CancellationToken ct = default);
     Task<PageResult<DashVersementDto>> GetVersementsAsync(Guid tontineId, int page, int pageSize, CancellationToken ct = default);
     Task<DashAuditResult> GetAuditAsync(Guid tontineId, int page, int pageSize, CancellationToken ct = default);
@@ -43,6 +49,8 @@ public sealed class DashboardReadService : IDashboardReadService
     private readonly IUtilisateurRepository _utilisateurs;
     private readonly INotificationRepository _notifications;
     private readonly INotificationService _notificationService;
+    private readonly ITontineAccessService _access;
+    private readonly IBureauRepository _bureaux;
 
     public DashboardReadService(
         ITontineRepository tontines,
@@ -51,7 +59,9 @@ public sealed class DashboardReadService : IDashboardReadService
         IAuditTrailService auditTrail,
         IUtilisateurRepository utilisateurs,
         INotificationRepository notifications,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        ITontineAccessService access,
+        IBureauRepository bureaux)
     {
         _tontines = tontines;
         _versements = versements;
@@ -60,18 +70,63 @@ public sealed class DashboardReadService : IDashboardReadService
         _utilisateurs = utilisateurs;
         _notifications = notifications;
         _notificationService = notificationService;
+        _access = access;
+        _bureaux = bureaux;
     }
 
     // ── Gestionnaire ────────────────────────────────────────────────
 
-    public async Task<DashTontineDto?> GetTontineGestionnaireAsync(Guid gestionnaireId, Guid? tontineId, CancellationToken ct = default)
+    public async Task<DashTontineDto?> GetTontineGestionnaireAsync(Guid utilisateurId, Guid? tontineId, bool admin, CancellationToken ct = default)
     {
         if (tontineId is { } id)
-            return await GetTontineAsync(id, ct);
+        {
+            var demandee = await _tontines.GetByIdReadOnlyAsync(TontineId.From(id), ct);
+            if (demandee is null) return null;
+            var acces = await _access.GetAccesAsync(id, utilisateurId, ct);
+            return await BuildTontineAsync(demandee, ct) with { MesRoles = RolesBureau(acces, admin) };
+        }
 
-        var tontines = await _tontines.GetByGestionnaireIdReadOnlyAsync(UtilisateurId.From(gestionnaireId), ct);
-        var choisie = tontines.FirstOrDefault(t => t.Status == TontineStatus.Active) ?? tontines.FirstOrDefault();
-        return choisie is null ? null : await BuildTontineAsync(choisie, ct);
+        // Candidates: the tontines the caller created (no bureau yet ⇒ creator holds both roles) and those
+        // where the bureau seats them. The access service has the last word (same rights as the mobile API):
+        // a creator replaced as responsable and trésorier is dropped.
+        // One instant for the bureau lookup and every access check: a vote reaching its deadline
+        // in between cannot make the two disagree.
+        var maintenant = DateTime.UtcNow;
+        var creees = await _tontines.GetByGestionnaireIdReadOnlyAsync(UtilisateurId.From(utilisateurId), ct);
+        var parId = creees.ToDictionary(t => t.Id.Value);
+        var ids = parId.Keys
+            .Concat(await _bureaux.GetGroupesOuSiegeAsync(utilisateurId, TypeGroupe.Tontine, maintenant, ct))
+            .Distinct()
+            .ToList();
+
+        var siennes = new List<(Tontine Tontine, AccesTontine Acces)>();
+        foreach (var candidat in ids)
+        {
+            var acces = await _access.GetAccesAsync(candidat, utilisateurId, maintenant, ct);
+            if (!acces.EstBureau) continue;
+            var t = parId.GetValueOrDefault(candidat) ?? await _tontines.GetByIdReadOnlyAsync(TontineId.From(candidat), ct);
+            if (t is not null) siennes.Add((t, acces));
+        }
+
+        // Deterministic default: active first, then the most recent, then by id.
+        var choisie = siennes
+            .OrderByDescending(x => x.Tontine.Status == TontineStatus.Active)
+            .ThenByDescending(x => x.Tontine.CreatedAt)
+            .ThenBy(x => x.Tontine.Id.Value)
+            .FirstOrDefault();
+        return choisie.Tontine is null
+            ? null
+            : await BuildTontineAsync(choisie.Tontine, ct) with { MesRoles = RolesBureau(choisie.Acces, admin) };
+    }
+
+    /// <summary>Roles of the caller on the tontine, as the gouvernance screen names them.</summary>
+    private static IReadOnlyList<string> RolesBureau(AccesTontine acces, bool admin)
+    {
+        var roles = new List<string>();
+        if (acces.Existe && acces.Niveau >= NiveauAcces.Gestionnaire) roles.Add("responsable");
+        if (acces.Existe && acces.EstTresorier) roles.Add("tresorier");
+        if (admin) roles.Add("admin");
+        return roles;
     }
 
     public async Task<DashTontineDto?> GetTontineAsync(Guid tontineId, CancellationToken ct = default)

@@ -1,5 +1,13 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
+/** Non-2xx answer of the API, with its HTTP status (0 when the API could not be reached). */
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 interface FetchOptions extends RequestInit {
   token?: string;
 }
@@ -21,15 +29,20 @@ export async function apiFetch<T>(
     ...(fetchOptions.headers as Record<string, string>),
   };
 
-  const response = await fetch(url, {
-    ...fetchOptions,
-    headers,
-    cache: "no-store", // SSR — always fresh data
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...fetchOptions,
+      headers,
+      cache: "no-store", // SSR — always fresh data
+    });
+  } catch (e) {
+    throw new ApiError(0, `API unreachable: ${(e as Error).message}`);
+  }
 
   if (!response.ok) {
     const error = await response.text().catch(() => "Unknown error");
-    throw new Error(`API ${response.status}: ${error}`);
+    throw new ApiError(response.status, `API ${response.status}: ${error}`);
   }
 
   return response.json() as Promise<T>;

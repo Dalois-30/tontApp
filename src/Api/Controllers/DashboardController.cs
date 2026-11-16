@@ -24,14 +24,16 @@ public class DashboardController : ControllerBase
         _access = access;
     }
 
-    // ── Gestionnaire ────────────────────────────────────────────────
+    // ── Bureau (responsable, trésorier) ─────────────────────────────
+    // The "gestionnaire" space is the bureau's: open to whoever is responsable or trésorier of a tontine
+    // (whatever their platform role), or an administrator. Same rights as the mobile API (TontineAccessService).
 
     /// <summary>
-    /// Tontine of the dashboard: <paramref name="tontineId"/> if given (must be managed by the caller),
-    /// otherwise the caller's most recent active tontine.
+    /// Tontine of the dashboard: <paramref name="tontineId"/> if given (the caller must sit on its bureau),
+    /// otherwise the caller's most recent active tontine among those where they sit on the bureau.
+    /// The response carries the caller's roles (<c>mesRoles</c>).
     /// </summary>
     [HttpGet("gestionnaire/tontine")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     public async Task<IActionResult> GetTontine([FromQuery] Guid? tontineId, CancellationToken ct)
     {
         var (tontine, error) = await ResolveTontineAsync(tontineId, ct);
@@ -39,7 +41,6 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet("gestionnaire/versements")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     public async Task<IActionResult> GetVersements(
         [FromQuery] Guid? tontineId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
@@ -49,7 +50,6 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet("gestionnaire/audit")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     public async Task<IActionResult> GetAudit(
         [FromQuery] Guid? tontineId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
     {
@@ -80,16 +80,27 @@ public class DashboardController : ControllerBase
         if (User.GetUtilisateurId() is not { } userId)
             return (null, Unauthorized(new { error = "User identity could not be determined." }));
 
+        var admin = User.EstAdmin();
         if (tontineId is { } id)
         {
             var acces = await _access.GetAccesAsync(id, userId, ct);
-            if (AccessResults.Check(acces, NiveauAcces.Gestionnaire, User.EstAdmin()) is { } denied)
-                return (null, denied);
+            if (!acces.Existe)
+                return (null, NotFound(new { error = "Tontine not found." }));
+            if (!admin && !acces.EstBureau)
+                return (null, Interdit("Only the responsable or the treasurer of this tontine can open its dashboard."));
         }
 
-        var tontine = await _dashboard.GetTontineGestionnaireAsync(userId, tontineId, ct);
-        return tontine is null
+        var tontine = await _dashboard.GetTontineGestionnaireAsync(userId, tontineId, admin, ct);
+        if (tontine is not null)
+            return (tontine, null);
+
+        // No tontine on the caller's bureau: a platform gestionnaire (or admin) may create one; anyone else
+        // has no business in the bureau's space.
+        return admin || User.IsInRole("Gestionnaire")
             ? (null, NotFound(new { error = "Aucune tontine trouvée." }))
-            : (tontine, null);
+            : (null, Interdit("Vous n'êtes responsable ni trésorier d'aucune tontine."));
     }
+
+    private ObjectResult Interdit(string message) =>
+        StatusCode(StatusCodes.Status403Forbidden, new { error = message });
 }

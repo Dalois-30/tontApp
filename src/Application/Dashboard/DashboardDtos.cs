@@ -46,7 +46,9 @@ public sealed record DashTontineDto(
     Guid GestionnaireId,
     string? GestionnaireNom,
     string AdhesionEnCours,
-    bool RattrapageAdhesionTardive);
+    bool RattrapageAdhesionTardive,
+    // Roles of the caller on this tontine ("responsable", "tresorier", "admin"); set by the bureau's dashboard only.
+    IReadOnlyList<string>? MesRoles = null);
 
 public sealed record DashVersementDto(
     Guid Id,

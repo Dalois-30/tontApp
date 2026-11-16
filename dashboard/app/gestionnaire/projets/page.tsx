@@ -6,6 +6,7 @@ import { formatMontant, formatJour, libelleStatutGroupe } from "@/lib/format";
 import type { ProjetResume, ReglesProjet } from "@/lib/types";
 import ReglesProjetForm, { REGLES_PAR_DEFAUT } from "@/components/ReglesProjetForm";
 import { Badge, Card, EmptyState, Icon, Meter, PageHeader } from "@/components/ui";
+import { usePeutCreerGroupe } from "@/components/Sidebar";
 
 const PERIODICITES = [
   { value: "Monthly", label: "Mensuelle" },
@@ -21,6 +22,7 @@ function premierDuMoisProchain(): string {
 export default function ProjetsPage() {
   const [projets, setProjets] = useState<ProjetResume[]>([]);
   const [loading, setLoading] = useState(true);
+  const peutCreer = usePeutCreerGroupe();
   const [ouvert, setOuvert] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -57,7 +59,11 @@ export default function ProjetsPage() {
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) { setError(data.error ?? "Création impossible."); return; }
+    if (!res.ok) {
+      // Creating a group still needs the platform "Gestionnaire" role, even for a bureau member.
+      setError(data.error ?? (res.status === 403 ? "Seul un compte gestionnaire peut créer un projet collectif." : "Création impossible."));
+      return;
+    }
     window.location.href = `/gestionnaire/projets/${data.id}`;
   }
 
@@ -65,11 +71,11 @@ export default function ProjetsPage() {
     <>
       <PageHeader eyebrow="Gestion" title="Projets collectifs"
         subtitle="Un objectif commun financé par paliers d'engagement, selon un échéancier. Les dépenses sont prélevées sur le solde, après validation."
-        actions={<button onClick={() => setOuvert((o) => !o)} className={ouvert ? "btn-secondary" : "btn-primary"} aria-expanded={ouvert}>
+        actions={peutCreer && <button onClick={() => setOuvert((o) => !o)} className={ouvert ? "btn-secondary" : "btn-primary"} aria-expanded={ouvert}>
           {ouvert ? "Fermer le formulaire" : <><Icon name="plus" />Nouveau projet</>}
         </button>} />
 
-      {ouvert && (
+      {peutCreer && ouvert && (
         <Card title="Nouveau projet" subtitle="Vous pourrez ajuster les règles plus tard ; chaque modification est journalisée.">
           <form onSubmit={creer} className="space-y-8">
             {error && <p className="notice-err">{error}</p>}
@@ -108,7 +114,9 @@ export default function ProjetsPage() {
       {loading ? (
         <p className="text-muted">Chargement…</p>
       ) : projets.length === 0 ? (
-        <div className="card"><EmptyState icon="target" title="Aucun projet pour le moment">Créez le premier avec « Nouveau projet », puis partagez son code d&apos;invitation.</EmptyState></div>
+        <div className="card"><EmptyState icon="target" title="Aucun projet pour le moment">{peutCreer
+          ? <>Créez le premier avec « Nouveau projet », puis partagez son code d&apos;invitation.</>
+          : "Les projets collectifs auxquels vous participez apparaîtront ici."}</EmptyState></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {projets.map((p) => (

@@ -64,14 +64,14 @@ export default function LoginPage() {
         <div className="w-full max-w-sm mx-auto space-y-8">
           <Logo />
           <div className="space-y-1.5">
-            <h1 className="text-[26px] font-semibold text-ink">Espace gestionnaire</h1>
-            <p className="text-ink-2">Encaissez, validez et suivez les cotisations de vos groupes.</p>
+            <h1 className="text-[26px] font-semibold text-ink">Espace du bureau</h1>
+            <p className="text-ink-2">Responsables et trésoriers : encaissez, validez et suivez les cotisations de vos groupes.</p>
           </div>
           <Suspense fallback={<p className="text-muted">Chargement…</p>}>
             <LoginForm />
           </Suspense>
           <p className="text-[12.5px] text-muted">
-            Les membres utilisent l&apos;application mobile. Ce tableau de bord est réservé aux gestionnaires et aux administrateurs.
+            Les membres utilisent l&apos;application mobile. Ce tableau de bord est réservé au bureau des tontines (responsable, trésorier) et aux administrateurs.
           </p>
         </div>
       </div>

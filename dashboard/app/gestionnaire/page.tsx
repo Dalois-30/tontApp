@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { apiFetch } from "@/lib/api";
-import { formatMontant, formatDate, libellePeriodicite, libelleStatutGroupe, libelleStatutMembre, doitSurLeTour } from "@/lib/format";
+import { ApiError, apiFetch } from "@/lib/api";
+import { formatMontant, formatDate, libellePeriodicite, libelleStatutGroupe, libelleStatutMembre, doitSurLeTour,
+  peutGerer, libelleRolesBureau, MESSAGE_HORS_BUREAU } from "@/lib/format";
 import type { MembreDto, TontineDto, VersementDto } from "@/lib/types";
 import { Badge, Card, EmptyState, Icon, PageHeader, SegmentedBar, Stat } from "@/components/ui";
 import RelancerButton from "@/components/RelancerButton";
@@ -9,19 +10,49 @@ import AdhesionsEnAttente from "@/components/AdhesionsEnAttente";
 import ReglesAdhesionTontine from "@/components/ReglesAdhesionTontine";
 import RoundsChart, { type RoundPoint } from "@/components/charts/RoundsChart";
 
+/** "hors_bureau": 403, the account sits on no tontine's bureau; "aucune": 404, a gestionnaire with none yet. */
+type Echec = "hors_bureau" | "aucune" | "erreur";
+
 async function charger(token: string) {
-  const tontine = await apiFetch<TontineDto>("/api/v1/dashboard/gestionnaire/tontine", { token }).catch(() => null);
-  if (!tontine) return { tontine: null, versements: [] as VersementDto[] };
+  let echec: Echec | null = null;
+  const tontine = await apiFetch<TontineDto>("/api/v1/dashboard/gestionnaire/tontine", { token }).catch((e: unknown) => {
+    const status = e instanceof ApiError ? e.status : 0;
+    echec = status === 403 ? "hors_bureau" : status === 404 ? "aucune" : "erreur";
+    return null;
+  });
+  if (!tontine) return { tontine: null, versements: [] as VersementDto[], echec: echec ?? ("erreur" as Echec) };
   const page = await apiFetch<{ items: VersementDto[] }>(`/api/v1/tontines/${tontine.id}/versements?page=1&pageSize=100`, { token })
     .catch(() => ({ items: [] as VersementDto[] }));
-  return { tontine, versements: page.items ?? [] };
+  return { tontine, versements: page.items ?? [], echec: null };
 }
 
 const ordreStatut: Record<string, number> = { en_retard: 0, a_payer: 1, paye_partiel: 2, en_attente: 3, paye: 4, beneficiaire: 5, suspendu: 6 };
 
 export default async function TableauDeBordTontine() {
   const token = (await cookies()).get("accessToken")?.value ?? "";
-  const { tontine, versements } = await charger(token);
+  const { tontine, versements, echec } = await charger(token);
+
+  if (echec === "erreur") {
+    return (
+      <>
+        <PageHeader eyebrow="Espace du bureau" title="Tableau de bord indisponible" />
+        <div className="card"><EmptyState icon="alert" title="Impossible de charger la tontine">
+          Le serveur n&apos;a pas répondu correctement. Réessayez dans un instant ; si le problème persiste, contactez l&apos;administrateur.
+        </EmptyState></div>
+      </>
+    );
+  }
+
+  if (echec === "hors_bureau") {
+    return (
+      <>
+        <PageHeader eyebrow="Espace du bureau" title="Accès réservé au bureau" />
+        <div className="card"><EmptyState icon="shield" title="Vous n'êtes au bureau d'aucune tontine">
+          {MESSAGE_HORS_BUREAU}
+        </EmptyState></div>
+      </>
+    );
+  }
 
   if (!tontine) {
     return (
@@ -54,13 +85,19 @@ export default async function TableauDeBordTontine() {
     attendu: Math.max(0, membres.filter((m) => m.statut !== "suspendu").length - 1) * tontine.montantCotisation,
   }));
 
+  const gere = peutGerer(tontine);
+  const roles = libelleRolesBureau(tontine);
+
   const lignes = [...membres].sort((a, b) => (ordreStatut[a.statut] ?? 9) - (ordreStatut[b.statut] ?? 9) || (a.rang ?? 0) - (b.rang ?? 0));
 
   return (
     <>
       <PageHeader
         eyebrow="Tontine"
-        badge={<Badge status={tontine.status} label={libelleStatutGroupe(tontine.status)} />}
+        badge={<>
+          <Badge status={tontine.status} label={libelleStatutGroupe(tontine.status)} />
+          {roles && <span data-testid="role-bureau" className="inline-flex items-center rounded-full h-6 px-2.5 text-[12px] font-medium bg-brand-soft text-brand">Vous : {roles}</span>}
+        </>}
         title={tontine.nom}
         subtitle={tontine.description}
         actions={<Link href="/gestionnaire/paiements" className="btn-primary"><Icon name="cash" />Encaisser une cotisation</Link>}
@@ -85,7 +122,7 @@ export default async function TableauDeBordTontine() {
       </div>
 
       {demandes.length > 0 && (
-        <AdhesionsEnAttente tontineId={tontine.id} demandes={demandes} rattrapage={tontine.rattrapageAdhesionTardive ?? true} />
+        <AdhesionsEnAttente tontineId={tontine.id} demandes={demandes} rattrapage={tontine.rattrapageAdhesionTardive ?? true} peutDecider={gere} />
       )}
 
       <Card title={tour ? `Tour ${tour.numero} : où en sont les membres` : "Membres"}
@@ -121,7 +158,7 @@ export default async function TableauDeBordTontine() {
                     {(m.resteDu ?? 0) > 0 && <p className="text-[12px] text-muted">tours {m.toursImpayes?.join(", ")}</p>}
                   </td>
                   <td className="text-right">
-                    {doitSurLeTour(m, tontine.montantCotisation) && m.telephone
+                    {gere && doitSurLeTour(m, tontine.montantCotisation) && m.telephone
                       ? <RelancerButton membreId={m.id} membreNom={m.nom} tontineId={tontine.id} />
                       : null}
                   </td>
@@ -163,7 +200,7 @@ export default async function TableauDeBordTontine() {
       </div>
 
       <ReglesAdhesionTontine tontineId={tontine.id} mode={tontine.adhesionEnCours ?? "AvecValidation"}
-        rattrapage={tontine.rattrapageAdhesionTardive ?? true} />
+        rattrapage={tontine.rattrapageAdhesionTardive ?? true} modifiable={gere} />
     </>
   );
 }

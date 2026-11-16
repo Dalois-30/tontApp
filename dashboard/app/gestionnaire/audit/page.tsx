@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { formatDate, formatMontant, libelleAction } from "@/lib/format";
+import { formatDate, formatMontant, libelleAction, MESSAGE_HORS_BUREAU } from "@/lib/format";
 import type { AuditEntriesResult, AuditEntryDto } from "@/lib/types";
 import { Card, EmptyState, Icon, PageHeader } from "@/components/ui";
 import Pagination from "@/components/Pagination";
@@ -30,11 +30,14 @@ export default function AuditTrailPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [chaineValide, setChaineValide] = useState<boolean | null>(null);
+  /** Last load failure: 403 → hors_bureau, 404 → aucune, anything else → erreur. */
+  const [echec, setEchec] = useState<"hors_bureau" | "aucune" | "erreur" | null>(null);
 
   const fetchAudit = useCallback(async (p: number) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/audit?page=${p}&pageSize=20`);
+      setEchec(res.ok ? null : res.status === 403 ? "hors_bureau" : res.status === 404 ? "aucune" : "erreur");
       if (res.ok) {
         const data: AuditEntriesResult = await res.json();
         setEntries(data.entries);
@@ -42,12 +45,28 @@ export default function AuditTrailPage() {
         setTotalPages(data.totalPages);
         setTotal(data.totalCount);
       }
+    } catch {
+      setEchec("erreur");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { fetchAudit(page); }, [page, fetchAudit]);
+
+  if (echec) {
+    const [icone, titre, texte] = echec === "hors_bureau"
+      ? ["shield", "Vous n'êtes au bureau d'aucune tontine", MESSAGE_HORS_BUREAU]
+      : echec === "aucune"
+        ? ["users", "Aucune tontine pour le moment", "Créez votre tontine depuis l'application mobile : son journal apparaîtra ici."]
+        : ["alert", "Impossible de charger le journal", "Le serveur n'a pas répondu correctement. Réessayez dans un instant."];
+    return (
+      <>
+        <PageHeader eyebrow="Espace du bureau" title="Journal d'audit" />
+        <div className="card"><EmptyState icon={icone} title={titre}>{texte}</EmptyState></div>
+      </>
+    );
+  }
 
   return (
     <>

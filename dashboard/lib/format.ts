@@ -101,3 +101,31 @@ const ACTIONS: Record<string, string> = {
   PaiementImporte: "Paiement importé du registre",
 };
 export const libelleAction = (a: string) => ACTIONS[a] ?? a;
+
+// ── Bureau roles (same rights as the API: the responsable runs the tontine, the trésorier validates) ──
+
+type AvecRoles = { mesRoles?: string[] | null } | null | undefined;
+
+/** Responsable (or admin): adhesions, rules, reminders, activation. */
+export function peutGerer(t: AvecRoles): boolean {
+  const r = t?.mesRoles ?? [];
+  return r.includes("responsable") || r.includes("admin");
+}
+
+/** Trésorier (or admin): validates or rejects payments. */
+export function peutValider(t: AvecRoles): boolean {
+  const r = t?.mesRoles ?? [];
+  return r.includes("tresorier") || r.includes("admin");
+}
+
+/** "Responsable · Trésorier", "Trésorier", "Administrateur"… */
+export function libelleRolesBureau(t: AvecRoles): string {
+  const r = t?.mesRoles ?? [];
+  const l = [r.includes("responsable") && "Responsable", r.includes("tresorier") && "Trésorier"].filter(Boolean) as string[];
+  if (l.length === 0 && r.includes("admin")) l.push("Administrateur");
+  return l.join(" · ");
+}
+
+/** Shown when the API refuses the bureau's space (403): the account sits on no bureau. */
+export const MESSAGE_HORS_BUREAU =
+  "Cet espace est réservé au bureau d'une tontine : son responsable et son trésorier. Vous n'êtes responsable ni trésorier d'aucune tontine ; suivez vos cotisations depuis l'application mobile.";

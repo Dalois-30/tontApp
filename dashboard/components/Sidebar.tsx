@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { Icon } from "./ui";
 
 interface NavItem { label: string; href: string; icon: string; exact?: boolean }
@@ -19,6 +19,19 @@ const adminNav: NavItem[] = [
   { label: "Tontines", href: "/admin/tontines", icon: "list" },
   { label: "Alertes", href: "/admin/alertes", icon: "bell" },
 ];
+
+/** Platform role of the session (JWT, display only: the API enforces every right). */
+const RolePlateforme = createContext("");
+
+export function RolePlateformeProvider({ role, children }: { role: string; children: React.ReactNode }) {
+  return <RolePlateforme.Provider value={role}>{children}</RolePlateforme.Provider>;
+}
+
+/** Creating a tontine or a project still needs the platform "Gestionnaire" role (or Admin). */
+export function usePeutCreerGroupe(): boolean {
+  const role = useContext(RolePlateforme);
+  return role === "Gestionnaire" || role === "Admin";
+}
 
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
@@ -69,7 +82,7 @@ export default function Sidebar({ role, nom }: { role: string; nom: string }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium text-ink truncate">{nom || "Utilisateur"}</p>
-        <p className="text-[12px] text-muted">{role === "Admin" ? "Administrateur" : "Gestionnaire"}</p>
+        <p className="text-[12px] text-muted">{role === "Admin" ? "Administrateur" : "Espace du bureau"}</p>
       </div>
       <button onClick={deconnexion} className="btn-ghost btn-sm px-2" aria-label="Se déconnecter" title="Se déconnecter">
         <Icon name="logout" className="h-[18px] w-[18px]" />
@@ -94,7 +107,7 @@ export default function Sidebar({ role, nom }: { role: string; nom: string }) {
       <aside className="hidden lg:flex w-64 shrink-0 flex-col gap-6 border-r border-line bg-surface px-4 py-5 h-screen sticky top-0">
         <div className="px-2"><Logo /></div>
         <div className="space-y-2">
-          <p className="eyebrow px-3">{role === "Admin" ? "Plateforme" : "Gestion"}</p>
+          <p className="eyebrow px-3">{role === "Admin" ? "Plateforme" : "Espace du bureau"}</p>
           {nav}
         </div>
         <div className="mt-auto">{compte}</div>

@@ -48,7 +48,9 @@ public class DashboardReadServiceTests
 
     private DashboardReadService Service() => new(_tontines.Object, _versements.Object,
         new Mock<IAuditEntryRepository>().Object, new Mock<IAuditTrailService>().Object,
-        _users.Object, new Mock<INotificationRepository>().Object, _notif.Object);
+        _users.Object, new Mock<INotificationRepository>().Object, _notif.Object,
+        new Mock<Application.TontineManagement.Services.ITontineAccessService>().Object,
+        new Mock<Domain.Gouvernance.IBureauRepository>().Object);
 
     private Guid Membre(string nom) => _tontine.Members.First(m => m.Name == nom).Id.Value;
     private Guid Tour => _tontine.Rounds.First().Id.Value;

@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import type { MembreDto } from "@/lib/types";
 import { Card, Icon } from "./ui";
 
-/** Membership requests made while the tontine was running: approve or refuse. */
-export default function AdhesionsEnAttente({ tontineId, demandes, rattrapage }: { tontineId: string; demandes: MembreDto[]; rattrapage: boolean }) {
+/** Membership requests made while the tontine was running: the responsable approves or refuses, the rest of the bureau sees them. */
+export default function AdhesionsEnAttente({ tontineId, demandes, rattrapage, peutDecider = true }: {
+  tontineId: string; demandes: MembreDto[]; rattrapage: boolean; peutDecider?: boolean;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +24,7 @@ export default function AdhesionsEnAttente({ tontineId, demandes, rattrapage }: 
 
   return (
     <Card className="border-info/40" title={`Demandes d'adhésion (${demandes.length})`}
-      subtitle={`La tontine a démarré. Un membre accepté passe en dernier dans l'ordre des bénéficiaires${rattrapage ? " et rattrape les tours déjà ouverts" : ", sans rattrapage des tours passés"}.`}>
+      subtitle={`La tontine a démarré. Un membre accepté passe en dernier dans l'ordre des bénéficiaires${rattrapage ? " et rattrape les tours déjà ouverts" : ", sans rattrapage des tours passés"}.${peutDecider ? "" : " Le responsable de la tontine décide."}`}>
       {error && <p className="notice-err mb-3">{error}</p>}
       <ul className="divide-y divide-line" data-testid="adhesions">
         {demandes.map((m) => (
@@ -34,12 +36,12 @@ export default function AdhesionsEnAttente({ tontineId, demandes, rattrapage }: 
                 {m.telephone && <p className="text-[12.5px] text-muted num">{m.telephone}</p>}
               </div>
             </div>
-            <div className="flex gap-2">
+            {peutDecider && <div className="flex gap-2">
               <button onClick={() => decider(m.id, "refuser")} disabled={busy === m.id} className="btn-secondary btn-sm">Refuser</button>
               <button onClick={() => decider(m.id, "accepter")} disabled={busy === m.id} className="btn-primary btn-sm">
                 <Icon name="check" className="h-3.5 w-3.5" />Accepter
               </button>
-            </div>
+            </div>}
           </li>
         ))}
       </ul>
