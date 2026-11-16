@@ -68,6 +68,15 @@ export interface TontineDetail extends TontineSummary {
   gestionnaireName: string;
   gestionnaireId: string;
   membres: TontineMember[];
+  /** Every round opened so far (the open one and the closed ones), in order. */
+  tours: TontineTour[];
+}
+
+export interface TontineTour {
+  id: string;
+  numero: number;
+  estOuvert: boolean;
+  beneficiaireNom: string;
 }
 
 export interface TontineMember {
@@ -80,6 +89,10 @@ export interface TontineMember {
   /** Contributions owed for earlier rounds (FCFA), including a late member's catch-up */
   resteDu?: number;
   toursImpayes?: number[];
+  /** Linked account, when the member has one */
+  utilisateurId?: string | null;
+  /** Raw status in the current round (paye, en_attente, a_payer, en_retard, beneficiaire, suspendu, adhesion_en_attente) */
+  statutTour?: string;
 }
 
 export interface TourInfo {

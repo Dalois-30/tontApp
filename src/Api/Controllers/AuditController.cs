@@ -9,12 +9,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 /// <summary>
-/// Endpoints for the audit trail: paginated listing and chain integrity verification.
+/// Endpoints for the audit trail: paginated listing and chain integrity verification. Readable by
+/// every member of the tontine (full transparency).
 /// </summary>
 [ApiController]
 [Route("api/v1/tontines")]
 [Produces("application/json")]
-[Authorize(Roles = "Gestionnaire,Admin")]
+[Authorize]
 public class AuditController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -36,7 +37,7 @@ public class AuditController : ControllerBase
     /// <response code="200">Audit entries returned.</response>
     [HttpGet("{id:guid}/audit")]
     [ProducesResponseType(typeof(AuditEntriesResult), StatusCodes.Status200OK)]
-    [TontineAccess(NiveauAcces.Gestionnaire)]
+    [TontineAccess(NiveauAcces.Membre)]
     public async Task<IActionResult> GetAuditEntries(
         Guid id,
         [FromQuery] int page = 1,
@@ -62,7 +63,7 @@ public class AuditController : ControllerBase
     /// <response code="200">Audit verification completed.</response>
     [HttpGet("{id:guid}/audit/verifier")]
     [ProducesResponseType(typeof(AuditVerificationResult), StatusCodes.Status200OK)]
-    [TontineAccess(NiveauAcces.Gestionnaire)]
+    [TontineAccess(NiveauAcces.Membre)]
     public async Task<IActionResult> VerifierAudit(Guid id, CancellationToken cancellationToken)
     {
         var query = new VerifierAuditQuery(id);

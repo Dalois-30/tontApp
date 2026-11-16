@@ -63,7 +63,7 @@ public sealed class Projet : AggregateRoot<ProjetId>
             Description = description,
             Objectif = objectif,
             Periodicite = periodicite,
-            DateDebut = dateDebut.Date,
+            DateDebut = DateTime.SpecifyKind(dateDebut.Date, DateTimeKind.Unspecified),
             NombreEcheances = nombreEcheances,
             Statut = StatutProjet.Brouillon,
             GestionnaireId = gestionnaireId,

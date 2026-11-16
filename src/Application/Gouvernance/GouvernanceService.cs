@@ -5,7 +5,10 @@ using System.Text.Json;
 using Application.ProjectManagement;
 using Domain.Common;
 using Domain.Gouvernance;
+using Domain.PaymentManagement.Repositories;
+using Domain.PaymentManagement.ValueObjects;
 using Domain.ProjectManagement;
+using Domain.TontineManagement;
 using Domain.TontineManagement.Repositories;
 using Domain.TontineManagement.ValueObjects;
 
@@ -59,21 +62,26 @@ public sealed class GouvernanceService
     private readonly ITontineRepository _tontines;
     private readonly IUnitOfWork _uow;
     private readonly Annuaire _annuaire;
+    private readonly IVersementRepository _versements;
+    private readonly IAuditEntryRepository _audit;
 
-    public GouvernanceService(IBureauRepository bureaux, IProjetRepository projets, ITontineRepository tontines, IUnitOfWork uow, Annuaire annuaire)
+    public GouvernanceService(IBureauRepository bureaux, IProjetRepository projets, ITontineRepository tontines, IUnitOfWork uow,
+        Annuaire annuaire, IVersementRepository versements, IAuditEntryRepository audit)
     {
         _bureaux = bureaux;
         _projets = projets;
         _tontines = tontines;
         _uow = uow;
         _annuaire = annuaire;
+        _versements = versements;
+        _audit = audit;
     }
 
     private static DateTime Maintenant => DateTime.UtcNow;
 
     private sealed record Membre(Guid UtilisateurId, string Nom, bool Actif);
 
-    private sealed record Groupe(TypeGroupe Type, Guid Id, string Nom, Bureau Bureau, List<Membre> Membres, Projet? Projet)
+    private sealed record Groupe(TypeGroupe Type, Guid Id, string Nom, Bureau Bureau, List<Membre> Membres, Projet? Projet, Tontine? Tontine = null)
     {
         public bool EstMembre(Guid u) => Membres.Any(m => m.UtilisateurId == u);
         public IReadOnlyCollection<Guid> Electeurs => Membres.Where(m => m.Actif).Select(m => m.UtilisateurId).ToList();
@@ -105,7 +113,7 @@ public sealed class GouvernanceService
             if (b is null) { b = Bureau.Creer(id, TypeGroupe.Tontine, t.GestionnaireId.Value); await _bureaux.AddAsync(b, ct); }
             var membres = t.Members.Where(m => m.UtilisateurId is not null)
                 .Select(m => new Membre(m.UtilisateurId!.Value, m.Name, m.Statut == StatutMembre.Actif)).ToList();
-            g = new Groupe(type, id, t.Name, b, membres, null);
+            g = new Groupe(type, id, t.Name, b, membres, null, t);
         }
         // Bureau members who are not participants (e.g. the gestionnaire of the association) belong to the group too.
         var autres = new[] { g.Bureau.ResponsableId, g.Bureau.TresorierId }.Distinct().Where(u => !g.EstMembre(u)).ToList();
@@ -238,7 +246,9 @@ public sealed class GouvernanceService
 
     /// <summary>
     /// Everything that happened in the group, newest first, in plain French: payments, tiers, expenses,
-    /// members, roles, votes, séance decisions. Filters: category, a participant, free text.
+    /// members, roles, votes, séance decisions. For a tontine, the payments come from the versements'
+    /// audit trail (who declared, who validated or rejected, how much, for whom). Filters: category, a
+    /// participant (project participant or tontine member id), free text.
     /// </summary>
     public async Task<IReadOnlyList<EvenementDto>> ChronologieAsync(TypeGroupe type, Guid id, string? categorie, Guid? participantId,
         string? recherche, Guid userId, bool admin, CancellationToken ct)
@@ -248,6 +258,9 @@ public sealed class GouvernanceService
         var p = g.Projet;
         var acteurs = b.Journal.Select(j => j.Acteur).ToList();
         if (p is not null) acteurs.AddRange(p.Journal.Select(j => j.Acteur));
+        var t = g.Tontine;
+        var audit = t is null ? [] : await _audit.GetByTontineOrderedAsync(t.Id, ct);
+        acteurs.AddRange(audit.Select(a => a.ActeurId));
         var noms = await _annuaire.NomsAsync(g.Membres.Select(m => (m.UtilisateurId, m.Nom))
                 .Concat(p?.Participants.Where(x => x.UtilisateurId is not null).Select(x => (x.UtilisateurId!.Value, x.Nom)) ?? []),
             acteurs.Concat(b.Votes.Select(v => v.CandidatId.ToString())), ct);
@@ -267,6 +280,8 @@ public sealed class GouvernanceService
                 evenements.Add(new EvenementDto(j.Horodatage, cat, j.Action, texte, NomU(j.Acteur), pid, "projet", j.Sequence));
             }
         }
+        if (t is not null)
+            evenements.AddRange(await EvenementsVersements(t, audit, NomU, ct));
         foreach (var j in b.Journal)
         {
             var d = JsonDocument.Parse(j.Payload).RootElement;
@@ -285,6 +300,54 @@ public sealed class GouvernanceService
         return r.OrderByDescending(e => e.Horodatage).ThenByDescending(e => e.Sequence).ToList();
     }
 
+    /// <summary>The tontine's payments, from the versements' chained audit trail.</summary>
+    private async Task<IEnumerable<EvenementDto>> EvenementsVersements(Tontine t, IReadOnlyList<Domain.PaymentManagement.Entities.AuditEntry> audit,
+        Func<object?, string> nomU, CancellationToken ct)
+    {
+        var versements = (await _versements.GetByTontineAsync(t.Id, ct)).ToDictionary(v => v.Id.Value);
+        var membres = t.Members.ToDictionary(m => m.Id.Value, m => m.Name);
+        var tours = t.Rounds.ToDictionary(r => r.Id.Value, r => r.RoundNumber);
+        var manuels = audit.Where(a => a.Action == AuditAction.VersementManuel).Select(a => a.VersementId.Value).ToHashSet();
+
+        var r = new List<EvenementDto>();
+        var sequence = 0;
+        foreach (var a in audit)
+        {
+            sequence++;
+            if (!versements.TryGetValue(a.VersementId.Value, out var v)) continue;
+            var payeur = v.PayeurId.Value;
+            var qui = membres.GetValueOrDefault(payeur, "Membre inconnu");
+            var montant = Fcfa(v.Montant.Valeur);
+            var tour = tours.TryGetValue(v.TourId.Value, out var n) ? $" (tour {n})" : "";
+            var d = Parse(a.Payload);
+            string? texte = a.Action switch
+            {
+                AuditAction.VersementManuel => $"{qui} : paiement de {montant}{tour} déclaré" +
+                    (Txt(d, "DescriptionPreuve") is { Length: > 0 } preuve ? $" ({preuve})" : ""),
+                AuditAction.VersementConfirme => $"{qui} : paiement de {montant}{tour} validé",
+                AuditAction.VersementRejete => $"{qui} : paiement de {montant}{tour} rejeté" +
+                    (Txt(d, "Raison") is { Length: > 0 } raison ? $" ({raison})" : ""),
+                // A mobile money payment starts with this entry alone; a declared one is described by VersementManuel.
+                AuditAction.VersementCree when !manuels.Contains(v.Id.Value) => $"{qui} : paiement de {montant}{tour} initié par mobile money",
+                _ => null,
+            };
+            if (texte is null) continue;
+            // "system" (mobile money webhook...) is not a person.
+            var acteur = System.Guid.TryParse(a.ActeurId, out _) ? nomU(a.ActeurId) : "Système";
+            r.Add(new EvenementDto(a.Timestamp, "paiements", a.Action.ToString(), texte, acteur, payeur, "versements", sequence));
+        }
+        return r;
+    }
+
+    private static JsonElement Parse(string json)
+    {
+        try { return JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json).RootElement; }
+        catch (JsonException) { return JsonDocument.Parse("{}").RootElement; }
+    }
+
+    private static string Fcfa(decimal m) =>
+        m.ToString("N0", CultureInfo.GetCultureInfo("fr-FR")).Replace('\u202F', ' ').Replace('\u00A0', ' ') + " FCFA";
+
     private static string Simplifier(string s) =>
         new string(s.Normalize(System.Text.NormalizationForm.FormD)
             .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray()).ToLowerInvariant();
@@ -300,7 +363,7 @@ public sealed class GouvernanceService
 
     private static string Fcfa(JsonElement d, string nom) =>
         decimal.TryParse(Txt(d, nom), NumberStyles.Number, CultureInfo.InvariantCulture, out var m)
-            ? m.ToString("N0", CultureInfo.GetCultureInfo("fr-FR")).Replace(' ', ' ').Replace(' ', ' ') + " FCFA" : "";
+            ? Fcfa(m) : "";
 
     private static string Jour(JsonElement d, string nom) =>
         DateTime.TryParse(Txt(d, nom), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var t)

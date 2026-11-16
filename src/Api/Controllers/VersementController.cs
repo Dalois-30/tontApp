@@ -40,16 +40,17 @@ public class VersementController : ControllerBase
 
     // ── POST /api/v1/versements/manuel ─────────────────────────────
     /// <summary>
-    /// Record a cash payment made on behalf of a member. Only the tontine's gestionnaire (or an admin)
-    /// may do this. The versement is created EN_ATTENTE and must then be validated via
+    /// Declare a payment made outside the app (cash, mobile money...). Any member declares their own
+    /// (<c>membreId</c> omitted or their own); the responsable or the trésorier can declare for any member
+    /// (member without a smartphone). The round must be the open one or a past round the member still owes.
+    /// The versement is created EN_ATTENTE and must then be validated by the trésorier via
     /// POST /api/v1/versements/{id}/valider.
     /// </summary>
     /// <response code="201">Payment recorded, pending validation. Body contains the versement id.</response>
-    /// <response code="400">Validation error or business rule violation.</response>
-    /// <response code="403">Caller does not manage this tontine.</response>
+    /// <response code="400">Validation error or business rule violation (already declared, round not due...).</response>
+    /// <response code="403">Caller is not a member, or declares for someone else without being in the bureau.</response>
     /// <response code="404">Tontine not found.</response>
     [HttpPost("manuel")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -62,15 +63,27 @@ public class VersementController : ControllerBase
             return Unauthorized(new { error = "User identity could not be determined." });
 
         var acces = await _accessService.GetAccesAsync(request.TontineId, userId, cancellationToken);
-        if (AccessResults.Check(acces, NiveauAcces.Gestionnaire, User.EstAdmin()) is { } denied)
+        var admin = User.EstAdmin();
+        if (AccessResults.Check(acces, NiveauAcces.Membre, admin) is { } denied)
             return denied;
+
+        var membreId = request.MembreId ?? acces.MembreId;
+        if (membreId is null)
+            return BadRequest(new { error = "Choose the member who paid." });
+        if (membreId != acces.MembreId && !acces.EstBureau && !admin)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "You can only declare your own payments." });
+
+        var preuve = string.Join(" · ", new[] { request.Moyen, request.Reference, request.DescriptionPreuve }
+            .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!.Trim()));
+        if (preuve.Length == 0)
+            return BadRequest(new { error = "Give the payment method or a receipt reference." });
 
         var command = new EnregistrerVersementManuelCommand(
             request.TontineId,
             request.TourId,
-            request.MembreId,
+            membreId.Value,
             request.Montant,
-            request.DescriptionPreuve,
+            preuve,
             ActeurId: userId);
 
         var result = await _mediator.Send(command, cancellationToken);
@@ -84,11 +97,10 @@ public class VersementController : ControllerBase
 
     // ── POST /api/v1/versements/{id}/valider ───────────────────────
     /// <summary>
-    /// Validate (confirm) a pending versement after checking the proof.
-    /// Only the tontine's gestionnaire (or an admin) may validate.
+    /// Validate (confirm) a pending versement after checking the money was received.
+    /// Only the tontine's trésorier (or an admin) may validate.
     /// </summary>
     [HttpPost("{id:guid}/valider")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -104,7 +116,7 @@ public class VersementController : ControllerBase
         var acces = await _accessService.GetAccesParVersementAsync(id, userId, cancellationToken);
         if (acces is null)
             return NotFound(new { error = "Versement not found." });
-        if (AccessResults.Check(acces, NiveauAcces.Gestionnaire, User.EstAdmin()) is { } denied)
+        if (AccessResults.CheckTresorier(acces, User.EstAdmin()) is { } denied)
             return denied;
 
         var reference = string.IsNullOrWhiteSpace(request?.Reference)
@@ -125,34 +137,34 @@ public class VersementController : ControllerBase
 
     // ── POST /api/v1/versements/{id}/rejeter ───────────────────────
     /// <summary>
-    /// Reject a pending versement (e.g. invalid proof). Only the tontine's gestionnaire (or an admin).
+    /// Reject a pending versement (money not received, wrong amount...). Only the tontine's trésorier
+    /// (or an admin), with a reason that every member can read.
     /// </summary>
     [HttpPost("{id:guid}/rejeter")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Rejeter(
         Guid id,
-        [FromBody] RejeterVersementRequest request,
+        [FromBody] RejeterVersementRequest? request,
         CancellationToken cancellationToken)
     {
         if (User.GetUtilisateurId() is not { } userId)
             return Unauthorized(new { error = "User identity could not be determined." });
 
-        if (string.IsNullOrWhiteSpace(request.Raison))
-            return BadRequest(new { error = "A reason is required." });
-
         var acces = await _accessService.GetAccesParVersementAsync(id, userId, cancellationToken);
         if (acces is null)
             return NotFound(new { error = "Versement not found." });
-        if (AccessResults.Check(acces, NiveauAcces.Gestionnaire, User.EstAdmin()) is { } denied)
+        if (AccessResults.CheckTresorier(acces, User.EstAdmin()) is { } denied)
             return denied;
+
+        if (string.IsNullOrWhiteSpace(request?.Raison))
+            return BadRequest(new { error = "A reason is required." });
 
         try
         {
-            await _mediator.Send(new RejeterVersementCommand(id, request.Raison, userId.ToString()), cancellationToken);
+            await _mediator.Send(new RejeterVersementCommand(id, request.Raison.Trim(), userId.ToString()), cancellationToken);
         }
         catch (InvalidOperationException ex)
         {
@@ -215,12 +227,18 @@ public class VersementController : ControllerBase
     }
 }
 
+/// <summary>
+/// <c>MembreId</c> omitted: the caller declares their own payment. The proof is built from
+/// <c>Moyen</c>, <c>Reference</c> and <c>DescriptionPreuve</c> (at least one is required).
+/// </summary>
 public sealed record EnregistrerVersementManuelRequest(
     Guid TontineId,
     Guid TourId,
-    Guid MembreId,
+    Guid? MembreId,
     decimal Montant,
-    string DescriptionPreuve);
+    string? DescriptionPreuve = null,
+    string? Moyen = null,
+    string? Reference = null);
 
 public sealed record InitierVersementRequest(
     Guid TontineId,

@@ -123,8 +123,11 @@ public sealed class ProjetService
     {
         var d = Droits.Aucun;
         if (admin) d |= Droits.Admin;
-        if (b.EstResponsable(userId)) d |= Droits.Responsable;
-        if (b.EstTresorier(userId)) d |= Droits.Tresorier;
+        // A vote past its deadline changes the roles now, without modifying the bureau (closing votes is
+        // the governance use cases' job).
+        var (responsable, tresorier) = b.RolesEffectifs(Maintenant);
+        if (responsable == userId) d |= Droits.Responsable;
+        if (tresorier == userId) d |= Droits.Tresorier;
         if (p.Participants.Any(x => x.UtilisateurId?.Value == userId)) d |= Droits.Participant;
         return d;
     }

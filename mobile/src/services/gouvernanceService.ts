@@ -68,7 +68,7 @@ export interface Evenement {
   resume: string;
   acteurNom: string;
   participantId: string | null;
-  source: 'projet' | 'bureau';
+  source: 'projet' | 'bureau' | 'versements';
   sequence: number;
 }
 

@@ -130,4 +130,37 @@ public class BureauTests
         Assert.Throws<InvalidOperationException>(() => b.RedigerSeance(T0.AddDays(3), "Futur", null, [], null, "x", [], m[1], T0));
         Assert.Throws<ArgumentException>(() => b.RedigerSeance(T0, "Vide", null, [], null, " ", [], m[1], T0));
     }
+
+    [Fact]
+    public void RolesEffectifs_AppliesAnExpiredVote_WithoutModifyingTheBureau()
+    {
+        var (b, m) = Nouveau(5);
+        var vote = b.ProposerChangementResponsable(m[2], m[1], m, T0);
+        b.Voter(vote.Id, m[1], true, T0.AddHours(1));
+        b.Voter(vote.Id, m[2], true, T0.AddHours(2));
+        b.Voter(vote.Id, m[3], false, T0.AddHours(3));
+        var journal = b.Journal.Count;
+
+        // Before the deadline: undecided, nothing changes.
+        Assert.Equal((Createur, Createur), b.RolesEffectifs(T0.AddDays(1)));
+        // After it: quorum reached and more yes than no, the candidate would be responsable...
+        Assert.Equal((m[2], Createur), b.RolesEffectifs(T0.AddDays(8)));
+        // ...but the bureau itself is untouched until a governance use case concludes the vote.
+        Assert.Equal(StatutVote.Ouvert, vote.Statut);
+        Assert.True(b.EstResponsable(Createur));
+        Assert.Equal(journal, b.Journal.Count);
+
+        b.Actualiser(T0.AddDays(8));
+        Assert.True(b.EstResponsable(m[2]));
+    }
+
+    [Fact]
+    public void RolesEffectifs_IgnoresAnExpiredRejectedVote()
+    {
+        var (b, m) = Nouveau(5);
+        var vote = b.ProposerChangementResponsable(m[2], m[1], m, T0);
+        b.Voter(vote.Id, m[1], true, T0.AddHours(1)); // quorum not reached at the deadline
+
+        Assert.Equal((Createur, Createur), b.RolesEffectifs(T0.AddDays(8)));
+    }
 }

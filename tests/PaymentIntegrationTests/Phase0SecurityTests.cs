@@ -29,6 +29,7 @@ public class Phase0SecurityTests
     private readonly Mock<IVersementRepository> _versementRepo = new();
     private readonly Mock<IAuditTrailService> _audit = new();
     private readonly Mock<IUnitOfWork> _uow = new();
+    private readonly Mock<Domain.Gouvernance.IBureauRepository> _bureauRepo = new();
 
     /// <summary>Active tontine with 3 members, the first one linked to <see cref="_membreUser"/>.</summary>
     private Tontine BuildActiveTontine()
@@ -46,7 +47,7 @@ public class Phase0SecurityTests
         return tontine;
     }
 
-    private TontineAccessService AccessService() => new(_tontineRepo.Object, _versementRepo.Object);
+    private TontineAccessService AccessService() => new(_tontineRepo.Object, _versementRepo.Object, _bureauRepo.Object);
 
     // ── Access service ──────────────────────────────────────────────
 
@@ -126,8 +127,8 @@ public class Phase0SecurityTests
         _versementRepo.Setup(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()))
             .Callback<Versement, CancellationToken>((v, _) => added = v);
 
-        var membre = tontine.Members.First();
         var tour = tontine.Rounds.First();
+        var membre = tontine.Members.First(m => m.Id != tour.BeneficiaryId);
         var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
             tontine.Id.Value, tour.Id.Value, membre.Id.Value, 5000m, "Reçu n°12",
             ActeurId: _gestionnaire.Value), CancellationToken.None);
@@ -140,6 +141,55 @@ public class Phase0SecurityTests
             .Equal(AuditAction.VersementCree, AuditAction.VersementManuel);
         added.AuditTrail.Last().ActeurId.Should().Be(_gestionnaire.Value.ToString());
         added.VerifierIntegrite().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Manuel_SuspendedMember_IsRejected()
+    {
+        var tontine = BuildActiveTontine();
+        SetupNoExistingVersements();
+        var tour = tontine.Rounds.First();
+        var membre = tontine.Members.First(m => m.Id != tour.BeneficiaryId);
+        tontine.SuspendMember(membre.Id);
+
+        var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
+            tontine.Id.Value, tour.Id.Value, membre.Id.Value, 5000m, "Espèces"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("active member");
+        _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Manuel_LateMember_CanPayPastRoundOwed()
+    {
+        var tontine = BuildActiveTontine();
+        SetupNoExistingVersements();
+        var tour1 = tontine.Rounds.First();
+        tontine.CloseRound(tour1.Id); // opens round 2
+        var (_, code) = tontine.GenerateInvitation();
+        var tardif = tontine.JoinWithInvitation("Dina", code, UtilisateurId.Create());
+        tontine.AccepterAdhesion(tardif.Id); // catch-up rule on by default: round 1 is owed
+
+        var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
+            tontine.Id.Value, tour1.Id.Value, tardif.Id.Value, 5000m, "Espèces"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+        _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Manuel_RoundNotOwed_IsRejected()
+    {
+        var tontine = BuildActiveTontine();
+        SetupNoExistingVersements();
+        var tour = tontine.Rounds.First();
+
+        // The beneficiary of a round does not pay for it.
+        var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
+            tontine.Id.Value, tour.Id.Value, tour.BeneficiaryId.Value, 5000m, "Espèces"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeFalse();
     }
 
     [Fact]
@@ -173,8 +223,8 @@ public class Phase0SecurityTests
     public async Task Manuel_PendingVersementAlreadyExists_IsRejected()
     {
         var tontine = BuildActiveTontine();
-        var membre = tontine.Members.First();
         var tour = tontine.Rounds.First();
+        var membre = tontine.Members.First(m => m.Id != tour.BeneficiaryId);
         var pending = Versement.Create(tontine.Id, TourId.From(tour.Id.Value), PayeurId.From(membre.Id.Value),
             Montant.Create(5000m));
         _versementRepo.Setup(r => r.GetByTontineAndTourAsync(tontine.Id, It.IsAny<TourId>(), It.IsAny<CancellationToken>()))

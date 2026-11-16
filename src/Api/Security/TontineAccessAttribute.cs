@@ -58,9 +58,21 @@ public static class AccessResults
         if (estAdmin || acces.Permet(requis))
             return null;
 
-        return new ObjectResult(new { error = "You do not have access to this tontine." })
-        {
-            StatusCode = StatusCodes.Status403Forbidden
-        };
+        return Interdit("You do not have access to this tontine.");
     }
+
+    /// <summary>Validating or rejecting a payment: the trésorier of the tontine (or an admin) only.</summary>
+    public static IActionResult? CheckTresorier(AccesTontine? acces, bool estAdmin)
+    {
+        if (acces is null || !acces.Existe)
+            return new NotFoundObjectResult(new { error = "Tontine not found." });
+
+        if (estAdmin || acces.EstTresorier)
+            return null;
+
+        return Interdit("Only the treasurer of this tontine can validate or reject a payment.");
+    }
+
+    private static ObjectResult Interdit(string message) =>
+        new(new { error = message }) { StatusCode = StatusCodes.Status403Forbidden };
 }

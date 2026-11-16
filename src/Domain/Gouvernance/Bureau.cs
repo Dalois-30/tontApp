@@ -73,6 +73,20 @@ public sealed class Bureau : AggregateRoot<Guid>
         return b;
     }
 
+    /// <summary>
+    /// The responsable and trésorier that hold at <paramref name="maintenant"/>, i.e. once the votes past
+    /// their deadline are concluded. Pure query: the bureau is not modified (closing a vote and journaling
+    /// it is done by <see cref="Actualiser"/>, called by the governance use cases only).
+    /// </summary>
+    public (Guid ResponsableId, Guid TresorierId) RolesEffectifs(DateTime maintenant)
+    {
+        var responsable = ResponsableId;
+        foreach (var vote in _votes.Where(v => v.Statut == StatutVote.Ouvert && v.FermeLe <= maintenant).OrderBy(v => v.FermeLe))
+            if (vote.Objet == ObjetVote.ChangementResponsable && vote.Issue(fin: true) == StatutVote.Adopte)
+                responsable = vote.CandidatId;
+        return (responsable, TresorierId);
+    }
+
     public bool EstResponsable(Guid utilisateurId) => ResponsableId == utilisateurId;
     public bool EstTresorier(Guid utilisateurId) => TresorierId == utilisateurId;
 
@@ -317,7 +331,7 @@ public sealed class Seance : Entity<Guid>
         if (string.IsNullOrWhiteSpace(titre)) throw new ArgumentException("A séance needs a title.", nameof(titre));
         if (string.IsNullOrWhiteSpace(compteRendu)) throw new ArgumentException("The report must not be empty.", nameof(compteRendu));
         if (date.Date > maintenant.Date) throw new InvalidOperationException("A séance report cannot be dated in the future.");
-        Date = date.Date;
+        Date = DateTime.SpecifyKind(date.Date, DateTimeKind.Unspecified); // calendar date, no time zone
         Titre = titre.Trim();
         Lieu = string.IsNullOrWhiteSpace(lieu) ? null : lieu.Trim();
         Presents = presents.Select(p => p.Trim()).Where(p => p.Length > 0).Distinct().ToList();

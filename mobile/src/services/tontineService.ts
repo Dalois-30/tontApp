@@ -124,6 +124,14 @@ function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
       statutPaiement: mapStatutPaiement(m.statut),
       resteDu: m.resteDu,
       toursImpayes: m.toursImpayes,
+      utilisateurId: m.utilisateurId,
+      statutTour: m.statut,
+    })),
+    tours: dto.tours.map((t) => ({
+      id: t.id,
+      numero: t.numero,
+      estOuvert: t.status === 'Ouvert',
+      beneficiaireNom: t.beneficiaire?.nom ?? '',
     })),
     tourActuel: tour
       ? {
@@ -138,6 +146,34 @@ function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
         }
       : null,
   };
+}
+
+/** A payment of the tontine, as every member sees it (GET /tontines/{id}/versements). */
+export interface VersementTontine {
+  id: string;
+  montant: number;
+  payeurId: string;
+  payeurNom: string;
+  tourId: string;
+  tourNumero: number | null;
+  status: 'en_attente' | 'confirme' | 'rejete';
+  reference: string | null;
+  dateCreation: string;
+  dateConfirmation: string | null;
+  /** What the declarant gave as proof (method · reference). */
+  preuve: string | null;
+  /** Reason of a rejection. */
+  motif: string | null;
+}
+
+export interface DeclarationVersement {
+  tontineId: string;
+  tourId: string;
+  /** Omitted: the caller declares their own payment (bureau members may declare for anyone). */
+  membreId?: string;
+  montant: number;
+  moyen: string;
+  reference?: string;
 }
 
 // ─── Service ───────────────────────────────────────────────────────────────────
@@ -231,6 +267,34 @@ export const tontineService = {
   async rejoindreParCode(data: RejoindreParCodeRequest): Promise<'actif' | 'en_attente'> {
     const response = await apiClient.post<{ statut: 'actif' | 'en_attente' }>('/tontines/rejoindre', data);
     return response.data.statut;
+  },
+
+  /** Every payment of the tontine (all members, all rounds), newest first. */
+  async getVersementsTontine(tontineId: string): Promise<VersementTontine[]> {
+    const tous: VersementTontine[] = [];
+    for (let page = 1; ; page++) {
+      const { data } = await apiClient.get<{ items: VersementTontine[]; totalPages: number }>(
+        `/tontines/${tontineId}/versements`, { params: { page, pageSize: 100 } },
+      );
+      tous.push(...data.items.map((v) => ({ ...v, preuve: v.preuve ?? null, motif: v.motif ?? null })));
+      if (page >= data.totalPages) return tous;
+    }
+  },
+
+  /** A member declares a payment made outside the app; it waits for the trésorier's validation. */
+  async declarerVersement(d: DeclarationVersement): Promise<string> {
+    const { data } = await apiClient.post<{ versementId: string }>('/versements/manuel', d);
+    return data.versementId;
+  },
+
+  /** Trésorier only: the money was received. */
+  async validerVersement(versementId: string): Promise<void> {
+    await apiClient.post(`/versements/${versementId}/valider`, {});
+  },
+
+  /** Trésorier only: rejection with a reason every member can read. */
+  async rejeterVersement(versementId: string, raison: string): Promise<void> {
+    await apiClient.post(`/versements/${versementId}/rejeter`, { raison });
   },
 
   async deciderAdhesion(tontineId: string, membreId: string, accepter: boolean): Promise<void> {

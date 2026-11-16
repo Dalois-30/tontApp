@@ -13,6 +13,8 @@ export type AuthStackParamList = {
 export type AppStackParamList = {
   Home: undefined;
   TontineDetail: { tontineId: string };
+  DeclarerVersement: { tontineId: string };
+  TontineVersements: { tontineId: string; aValider?: boolean };
   Paiement: { tontineId: string; tourId: string; montant: number };
   Gestionnaire: { tontineId: string; tourId: string };
   CreateTontine: undefined;

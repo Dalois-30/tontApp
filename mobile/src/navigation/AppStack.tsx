@@ -28,6 +28,8 @@ import { GouvernanceScreen } from '../screens/app/groupe/GouvernanceScreen';
 import { SeancesScreen } from '../screens/app/groupe/SeancesScreen';
 import { SeanceFormScreen } from '../screens/app/groupe/SeanceFormScreen';
 import { ChronologieScreen } from '../screens/app/groupe/ChronologieScreen';
+import { DeclarerVersementScreen } from '../screens/app/tontine/DeclarerVersementScreen';
+import { TontineVersementsScreen } from '../screens/app/tontine/TontineVersementsScreen';
 import type { AppStackParamList } from './types';
 import { colors } from '../config/theme';
 
@@ -75,6 +77,8 @@ export function AppStack(): React.JSX.Element {
         component={TontineDetailScreen}
         options={{ title: 'Détail Tontine' }}
       />
+      <Stack.Screen name="DeclarerVersement" component={DeclarerVersementScreen} options={{ title: 'Déclarer ma cotisation' }} />
+      <Stack.Screen name="TontineVersements" component={TontineVersementsScreen} options={{ title: 'Tous les versements' }} />
       <Stack.Screen
         name="Paiement"
         component={PaiementScreen}

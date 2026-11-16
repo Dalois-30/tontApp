@@ -25,8 +25,7 @@ public sealed class EnvoyerMessageCommandHandler : ICommandHandler<EnvoyerMessag
             TontineId.From(request.TontineId), cancellationToken)
             ?? throw new InvalidOperationException($"Tontine {request.TontineId} not found.");
 
-        if (tontine.GestionnaireId.Value != request.GestionnaireId)
-            throw new InvalidOperationException("Only the gestionnaire of this tontine can send messages.");
+        // Who may send (the responsable of the tontine's bureau) is checked by the API (TontineAccess).
 
         if (string.IsNullOrWhiteSpace(request.Message) || request.Message.Length > 300)
             throw new InvalidOperationException("Le message doit contenir entre 1 et 300 caractères.");

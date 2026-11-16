@@ -52,7 +52,11 @@ public sealed record DashVersementDto(
     string Status,
     string? Reference,
     DateTime DateCreation,
-    DateTime? DateConfirmation);
+    DateTime? DateConfirmation,
+    /// <summary>What the declarant gave as proof (method, reference), from the VersementManuel audit entry.</summary>
+    string? Preuve = null,
+    /// <summary>Reason of a rejection, from the VersementRejete audit entry.</summary>
+    string? Motif = null);
 
 public sealed record DashAuditEntryDto(Guid Id, string Action, string ActeurId, string? ActeurNom, DateTime Timestamp, string Payload, string Hash);
 

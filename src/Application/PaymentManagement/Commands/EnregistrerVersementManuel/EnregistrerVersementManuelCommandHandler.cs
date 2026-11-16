@@ -11,7 +11,7 @@ using Domain.TontineManagement.Repositories;
 using Domain.TontineManagement.ValueObjects;
 
 /// <summary>
-/// Records a cash payment declared by the gestionnaire on behalf of a member.
+/// Records a payment declared by a member (or by the bureau on behalf of a member).
 /// The versement stays EN_ATTENTE until it is explicitly validated
 /// (POST /api/v1/versements/{id}/valider): entering a payment and validating it are two distinct,
 /// audited steps.
@@ -47,11 +47,19 @@ public sealed class EnregistrerVersementManuelCommandHandler
         if (tontine is null)
             return Result<Guid>.Failure("Tontine not found.");
 
-        if (tontine.Members.All(m => m.Id.Value != request.MembreId))
+        var membre = tontine.Members.FirstOrDefault(m => m.Id.Value == request.MembreId);
+        if (membre is null)
             return Result<Guid>.Failure("Member not found in this tontine.");
 
         if (tontine.Rounds.All(r => r.Id.Value != request.TourId))
             return Result<Guid>.Failure("Round not found in this tontine.");
+
+        if (membre.Statut != StatutMembre.Actif)
+            return Result<Guid>.Failure("Only an active member can pay a contribution.");
+
+        // The open round, or a past round the member owes (catch-up rule of the tontine).
+        if (tontine.ToursDusPar(membre.Id).All(r => r.Id.Value != request.TourId))
+            return Result<Guid>.Failure("This member does not owe a contribution for this round.");
 
         var tourId = TourId.From(request.TourId);
         var payeurId = PayeurId.From(request.MembreId);
@@ -63,7 +71,7 @@ public sealed class EnregistrerVersementManuelCommandHandler
         if (existingVersements.Any(v => v.PayeurId == payeurId && v.Statut != VersementStatus.Echoue))
         {
             return Result<Guid>.Failure(
-                $"Un versement en attente ou confirmé existe déjà pour le membre {request.MembreId} sur ce tour.");
+                $"Un versement est déjà déclaré (en attente de validation) ou validé pour {membre.Name} sur ce tour.");
         }
 
         // Build hash chain from last versement for this tontine

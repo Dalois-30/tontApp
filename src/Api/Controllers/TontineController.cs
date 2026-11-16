@@ -149,7 +149,6 @@ public class TontineController : ControllerBase
     /// <response code="400">Business rule violation (not enough members, wrong status).</response>
     /// <response code="404">Tontine not found.</response>
     [HttpPost("{id:guid}/activate")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -182,7 +181,6 @@ public class TontineController : ControllerBase
     /// <response code="400">Business rule violation (round already open, no remaining members).</response>
     /// <response code="404">Tontine not found.</response>
     [HttpPost("{id:guid}/rounds/open")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     [ProducesResponseType(typeof(OpenRoundResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -217,7 +215,6 @@ public class TontineController : ControllerBase
     /// <response code="400">Business rule violation (round already closed, wrong status).</response>
     /// <response code="404">Tontine or round not found.</response>
     [HttpPost("{id:guid}/rounds/{roundId:guid}/close")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -334,7 +331,6 @@ public class TontineController : ControllerBase
     /// <response code="400">Validation error or business rule violation.</response>
     /// <response code="404">Tontine or member not found.</response>
     [HttpPut("{id:guid}/membres/{membreId:guid}/suspendre")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -419,7 +415,6 @@ public class TontineController : ControllerBase
     /// Send a custom message to all active members of a tontine (gestionnaire only).
     /// </summary>
     [HttpPost("{id:guid}/messages")]
-    [Authorize(Roles = "Gestionnaire,Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -490,8 +485,9 @@ public class TontineController : ControllerBase
     }
 
     // ── GET /api/v1/tontines/{id}/versements ───────────────────────
+    /// <summary>Every payment of the tontine (declared, validated, rejected): readable by all members.</summary>
     [HttpGet("{id:guid}/versements")]
-    [TontineAccess(NiveauAcces.Gestionnaire)]
+    [TontineAccess(NiveauAcces.Membre)]
     public async Task<IActionResult> GetVersements(
         Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
         => Ok(await _dashboard.GetVersementsAsync(id, page, pageSize, cancellationToken));

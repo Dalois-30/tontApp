@@ -102,7 +102,9 @@ public sealed class DashboardReadService : IDashboardReadService
                 StatutVersement(v.Statut),
                 v.ReferenceExterne,
                 v.CreatedAt,
-                v.ConfirmedAt));
+                v.ConfirmedAt,
+                ChampAudit(v, AuditAction.VersementManuel, "DescriptionPreuve"),
+                ChampAudit(v, AuditAction.VersementRejete, "Raison")));
 
         return PageResult<DashVersementDto>.From(items, page, pageSize);
     }
@@ -298,6 +300,21 @@ public sealed class DashboardReadService : IDashboardReadService
         if (siens.Any(v => v.Statut == VersementStatus.Confirme)) return "paye";
         if (siens.Any(v => v.Statut == VersementStatus.EnAttente)) return "en_attente";
         return DateTime.UtcNow > tour.DateLimite ? "en_retard" : "a_payer";
+    }
+
+    /// <summary>A text field of the payload of the versement's last audit entry of the given action.</summary>
+    private static string? ChampAudit(Versement v, AuditAction action, string champ)
+    {
+        var e = v.AuditTrail.Where(x => x.Action == action).OrderBy(x => x.Timestamp).LastOrDefault();
+        if (e is null || string.IsNullOrWhiteSpace(e.Payload)) return null;
+        try
+        {
+            using var d = System.Text.Json.JsonDocument.Parse(e.Payload);
+            return d.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                && d.RootElement.TryGetProperty(champ, out var x) && x.ValueKind == System.Text.Json.JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(x.GetString()) ? x.GetString() : null;
+        }
+        catch (System.Text.Json.JsonException) { return null; }
     }
 
     private static string StatutVersement(VersementStatus s) => s switch
