@@ -367,3 +367,8 @@ FodyWeavers.xsd
 
 # Vidéos du tutoriel (hébergées sur la page publiée, régénérables)
 docs/tutoriel/videos/
+
+# BMAD (rendered skills, personal config)
+_bmad/render/
+_bmad/custom/config.user.toml
+_bmad/config.user.toml
