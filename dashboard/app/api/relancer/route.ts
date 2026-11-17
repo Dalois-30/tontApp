@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+// UUID validation of the inputs prevents SSRF.
+import { UUID_REGEX } from "@/lib/tontine";
 
 const API_BASE_URL = process.env.API_URL ?? "http://localhost:8080";
 
-// UUID v4 regex for input validation to prevent SSRF
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
   try {

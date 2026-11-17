@@ -7,12 +7,15 @@ import type { ProjetDetails, ReglesProjet } from "@/lib/types";
 import { Badge, Card, EmptyState, Icon, Meter, PageHeader } from "@/components/ui";
 import ReglesProjetForm from "@/components/ReglesProjetForm";
 import CollecteChart, { type CollectePoint } from "@/components/charts/CollecteChart";
+import { useTontineChoisie } from "@/components/Sidebar";
+import { avecTontine } from "@/lib/tontine";
 
 const CASE: Record<string, string> = { soldee: "bg-good", partielle: "bg-warn-mark", en_retard: "bg-bad", a_venir: "bg-surface-2 ring-1 ring-inset ring-line" };
 const CASE_LIBELLE: Record<string, string> = { soldee: "soldée", partielle: "partielle", en_retard: "en retard", a_venir: "à venir" };
 
 export default function ProjetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const tontine = useTontineChoisie();
   const [p, setP] = useState<ProjetDetails | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -101,7 +104,7 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
   return (
     <>
       <PageHeader
-        eyebrow={<Link href="/gestionnaire/projets" className="inline-flex items-center gap-1 hover:text-ink"><Icon name="back" className="h-3.5 w-3.5" />Projets collectifs</Link>}
+        eyebrow={<Link href={avecTontine("/gestionnaire/projets", tontine)} className="inline-flex items-center gap-1 hover:text-ink"><Icon name="back" className="h-3.5 w-3.5" />Projets collectifs</Link>}
         title={p.nom}
         badge={<Badge status={p.statut} label={libelleStatutGroupe(p.statut)} />}
         subtitle={p.description ?? undefined}

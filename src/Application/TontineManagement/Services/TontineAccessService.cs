@@ -69,6 +69,10 @@ public sealed class TontineAccessService : ITontineAccessService
     public async Task<AccesTontine> GetAccesAsync(
         Guid tontineId, Guid utilisateurId, DateTime maintenant, CancellationToken cancellationToken = default)
     {
+        // An empty id names no tontine (TontineId refuses it): not found, never a server error.
+        if (tontineId == Guid.Empty)
+            return AccesTontine.Introuvable(tontineId);
+
         var tontine = await _tontineRepository.GetByIdReadOnlyAsync(TontineId.From(tontineId), cancellationToken);
         if (tontine is null)
             return AccesTontine.Introuvable(tontineId);

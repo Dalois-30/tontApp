@@ -9,15 +9,19 @@ import RelancerButton from "@/components/RelancerButton";
 import AdhesionsEnAttente from "@/components/AdhesionsEnAttente";
 import ReglesAdhesionTontine from "@/components/ReglesAdhesionTontine";
 import RoundsChart, { type RoundPoint } from "@/components/charts/RoundsChart";
+import { avecTontine, echecDuStatut, ecranEchec, PARAM_TONTINE, tontineDemandee, type EchecTontine } from "@/lib/tontine";
 
-/** "hors_bureau": 403, the account sits on no tontine's bureau; "aucune": 404, a gestionnaire with none yet. */
-type Echec = "hors_bureau" | "aucune" | "erreur";
+/**
+ * "hors_bureau": 403, the account sits on no tontine's bureau (or not on the chosen one's);
+ * "aucune": 404, a gestionnaire with none yet (or an unknown chosen tontine).
+ */
+type Echec = EchecTontine;
 
-async function charger(token: string) {
+async function charger(token: string, tontineId: string | null) {
   let echec: Echec | null = null;
-  const tontine = await apiFetch<TontineDto>("/api/v1/dashboard/gestionnaire/tontine", { token }).catch((e: unknown) => {
-    const status = e instanceof ApiError ? e.status : 0;
-    echec = status === 403 ? "hors_bureau" : status === 404 ? "aucune" : "erreur";
+  const q = tontineId ? `?tontineId=${encodeURIComponent(tontineId)}` : "";
+  const tontine = await apiFetch<TontineDto>(`/api/v1/dashboard/gestionnaire/tontine${q}`, { token }).catch((e: unknown) => {
+    echec = echecDuStatut(e instanceof ApiError ? e.status : 0);
     return null;
   });
   if (!tontine) return { tontine: null, versements: [] as VersementDto[], echec: echec ?? ("erreur" as Echec) };
@@ -28,9 +32,27 @@ async function charger(token: string) {
 
 const ordreStatut: Record<string, number> = { en_retard: 0, a_payer: 1, paye_partiel: 2, en_attente: 3, paye: 4, beneficiaire: 5, non_du: 6, suspendu: 7 };
 
-export default async function TableauDeBordTontine() {
+export default async function TableauDeBordTontine({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const token = (await cookies()).get("accessToken")?.value ?? "";
-  const { tontine, versements, echec } = await charger(token);
+  // The tontine chosen in the selector (?tontine=), else the API's default one.
+  const demandee = tontineDemandee((await searchParams)[PARAM_TONTINE]);
+  const choisie = demandee === "invalide" ? null : demandee;
+  const { tontine, versements, echec } = demandee === "invalide"
+    ? { tontine: null, versements: [] as VersementDto[], echec: "aucune" as Echec }
+    : await charger(token, choisie);
+
+  if ((echec === "hors_bureau" || echec === "aucune") && demandee !== null) {
+    // A tontine chosen by the URL that cannot be shown: not on its bureau (403) or unknown (404).
+    const [icone, titre, texte] = ecranEchec(echec, true, "");
+    return (
+      <>
+        <PageHeader eyebrow="Espace du bureau" title="Tontine" />
+        <div className="card"><EmptyState icon={icone} title={titre}>{texte}</EmptyState></div>
+      </>
+    );
+  }
 
   if (echec === "erreur") {
     return (
@@ -99,7 +121,7 @@ export default async function TableauDeBordTontine() {
         </>}
         title={tontine.nom}
         subtitle={tontine.description}
-        actions={<Link href="/gestionnaire/paiements" className="btn-primary"><Icon name="cash" />Encaisser une cotisation</Link>}
+        actions={<Link href={avecTontine("/gestionnaire/paiements", choisie)} className="btn-primary"><Icon name="cash" />Encaisser une cotisation</Link>}
       >
         <p className="text-[13px] text-muted">
           {formatMontant(tontine.montantCotisation)} · {libellePeriodicite(tontine.periodicite).toLowerCase()} · {membres.length} / {tontine.maxMembres} membres
@@ -181,7 +203,7 @@ export default async function TableauDeBordTontine() {
             : <RoundsChart data={rounds} />}
         </Card>
         <Card className="xl:col-span-2" title="Derniers paiements"
-          actions={<Link href="/gestionnaire/paiements" className="btn-ghost btn-sm">Tout voir <Icon name="arrow" className="h-3.5 w-3.5" /></Link>}
+          actions={<Link href={avecTontine("/gestionnaire/paiements", choisie)} className="btn-ghost btn-sm">Tout voir <Icon name="arrow" className="h-3.5 w-3.5" /></Link>}
           bodyClassName="pt-3">
           {versements.length === 0 ? (
             <EmptyState icon="receipt" title="Aucun paiement enregistré" />

@@ -40,6 +40,19 @@ public class DashboardController : ControllerBase
         return error ?? Ok(tontine);
     }
 
+    /// <summary>
+    /// Tontines where the caller sits on the bureau (responsable or trésorier), with their roles on each,
+    /// the default tontine first. An administrator gets the tontines where they sit (any other one is
+    /// opened with an explicit <c>tontineId</c>). Empty list when there is none.
+    /// </summary>
+    [HttpGet("gestionnaire/tontines")]
+    public async Task<IActionResult> GetTontinesBureau(CancellationToken ct)
+    {
+        if (User.GetUtilisateurId() is not { } userId)
+            return Unauthorized(new { error = "User identity could not be determined." });
+        return Ok(await _dashboard.GetTontinesBureauAsync(userId, User.EstAdmin(), ct));
+    }
+
     [HttpGet("gestionnaire/versements")]
     public async Task<IActionResult> GetVersements(
         [FromQuery] Guid? tontineId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)

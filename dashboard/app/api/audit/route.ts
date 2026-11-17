@@ -1,37 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { proxyToApi, pagingQuery } from "@/lib/proxy";
 
-const API_BASE_URL = process.env.API_URL ?? "http://localhost:8080";
-
+/** Audit trail of the chosen tontine (tontineId), or of the caller's default tontine. */
 export async function GET(request: NextRequest) {
-  const token = request.cookies.get("accessToken")?.value;
-  if (!token) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const page = searchParams.get("page") ?? "1";
-  const pageSize = searchParams.get("pageSize") ?? "20";
-
-  try {
-    // In production, tontineId would come from the gestionnaire's profile
-    const apiRes = await fetch(
-      `${API_BASE_URL}/api/v1/dashboard/gestionnaire/audit?page=${page}&pageSize=${pageSize}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      }
-    );
-
-    if (!apiRes.ok) {
-      return NextResponse.json(
-        { error: "Erreur API" },
-        { status: apiRes.status }
-      );
-    }
-
-    const data = await apiRes.json();
-    return NextResponse.json(data);
-  } catch {
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
-  }
+  return proxyToApi(request, `/api/v1/dashboard/gestionnaire/audit?${pagingQuery(request)}`);
 }

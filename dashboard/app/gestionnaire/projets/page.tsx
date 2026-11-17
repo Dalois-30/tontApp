@@ -6,7 +6,8 @@ import { formatMontant, formatJour, libelleStatutGroupe } from "@/lib/format";
 import type { ProjetResume, ReglesProjet } from "@/lib/types";
 import ReglesProjetForm, { REGLES_PAR_DEFAUT } from "@/components/ReglesProjetForm";
 import { Badge, Card, EmptyState, Icon, Meter, PageHeader } from "@/components/ui";
-import { usePeutCreerGroupe } from "@/components/Sidebar";
+import { usePeutCreerGroupe, useTontineChoisie } from "@/components/Sidebar";
+import { avecTontine } from "@/lib/tontine";
 
 const PERIODICITES = [
   { value: "Monthly", label: "Mensuelle" },
@@ -23,6 +24,8 @@ export default function ProjetsPage() {
   const [projets, setProjets] = useState<ProjetResume[]>([]);
   const [loading, setLoading] = useState(true);
   const peutCreer = usePeutCreerGroupe();
+  // Projects belong to no tontine, but the tontine chosen in the selector follows the links.
+  const tontine = useTontineChoisie();
   const [ouvert, setOuvert] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,7 +67,7 @@ export default function ProjetsPage() {
       setError(data.error ?? (res.status === 403 ? "Seul un compte gestionnaire peut créer un projet collectif." : "Création impossible."));
       return;
     }
-    window.location.href = `/gestionnaire/projets/${data.id}`;
+    window.location.href = avecTontine(`/gestionnaire/projets/${data.id}`, tontine);
   }
 
   return (
@@ -120,7 +123,7 @@ export default function ProjetsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {projets.map((p) => (
-            <Link key={p.id} href={`/gestionnaire/projets/${p.id}`}
+            <Link key={p.id} href={avecTontine(`/gestionnaire/projets/${p.id}`, tontine)}
               className="card p-5 space-y-4 transition-colors hover:border-brand/50 focus-visible:border-brand">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

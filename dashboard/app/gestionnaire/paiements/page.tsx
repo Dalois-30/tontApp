@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { formatMontant, formatDate, resteTourOuvert, doitSurLeTour, libelleStatutMembre, peutValider, libelleRolesBureau, MESSAGE_HORS_BUREAU } from "@/lib/format";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
+import { formatMontant, formatDate, resteTourOuvert, doitSurLeTour, libelleStatutMembre, peutValider, libelleRolesBureau } from "@/lib/format";
+import { echecDuStatut, ecranEchec, PARAM_TONTINE, tontineDemandee } from "@/lib/tontine";
 import type { TontineDto, VersementDto } from "@/lib/types";
 import { Badge, Card, EmptyState, Icon, PageHeader } from "@/components/ui";
 import Pagination from "@/components/Pagination";
@@ -14,9 +16,19 @@ type Filtre = "tous" | "en_attente" | "confirme" | "rejete";
 type Etat = "chargement" | "ok" | "hors_bureau" | "aucune" | "erreur";
 
 export default function PaiementsPage() {
+  // The page reads the chosen tontine from the URL (useSearchParams).
+  return <Suspense fallback={null}><Paiements /></Suspense>;
+}
+
+function Paiements() {
+  // The tontine chosen in the selector (?tontine=), else the API's default one.
+  const demandee = tontineDemandee(useSearchParams().get(PARAM_TONTINE));
   const [paiements, setPaiements] = useState<VersementDto[]>([]);
   const [tontine, setTontine] = useState<TontineDto | null>(null);
-  const [page, setPage] = useState(1);
+  // The page number belongs to a tontine: another tontine chosen starts at its first page.
+  const [pagination, setPagination] = useState({ cle: demandee, page: 1 });
+  const page = pagination.cle === demandee ? pagination.page : 1;
+  const setPage = (p: number) => setPagination({ cle: demandee, page: p });
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -35,34 +47,56 @@ export default function PaiementsPage() {
 
   const pageSize = 20;
 
+  // Only the latest load may update the page (a tontine change can overlap a load still running).
+  const dernier = useRef(0);
+
   const fetchAll = useCallback(async (p: number) => {
+    const n = ++dernier.current;
+    const aJour = () => n === dernier.current;
     setLoading(true);
     try {
-      // The tontine first, then the payments of that very tontine.
-      const resT = await fetch(tontineId.current ? `/api/tontine?tontineId=${tontineId.current}` : "/api/tontine");
+      if (demandee === "invalide") { setEtat("aucune"); return; }
+      // The tontine first (the chosen one, else the default one), then the payments of that very tontine.
+      const id = tontineId.current ?? demandee;
+      const resT = await fetch(id ? `/api/tontine?tontineId=${encodeURIComponent(id)}` : "/api/tontine");
+      if (!aJour()) return;
       if (!resT.ok) {
-        setEtat(resT.status === 403 ? "hors_bureau" : resT.status === 404 ? "aucune" : "erreur");
+        setEtat(echecDuStatut(resT.status));
         return;
       }
       const t: TontineDto = await resT.json();
+      if (!aJour()) return;
       tontineId.current = t.id;
       setTontine(t);
       setMontant((m) => m || String(t.montantCotisation));
 
       const resP = await fetch(`/api/paiements?page=${p}&pageSize=${pageSize}&tontineId=${t.id}`);
+      if (!aJour()) return;
       if (!resP.ok) { setEtat("erreur"); return; }
       const data: PaiementsResponse = await resP.json();
+      if (!aJour()) return;
       setPaiements(data.items ?? []);
       setTotalPages(data.totalPages);
       setEtat("ok");
     } catch {
-      setEtat("erreur");
+      if (aJour()) setEtat("erreur");
     } finally {
-      setLoading(false);
+      if (aJour()) setLoading(false);
     }
-  }, []);
+  }, [demandee]);
 
-  useEffect(() => { fetchAll(page); }, [page, fetchAll]);
+  // One load per (tontine, page); another tontine chosen first forgets the previous one, its list, its
+  // half-filled form and any action still running on it.
+  const chargee = useRef(demandee);
+  useEffect(() => {
+    if (chargee.current !== demandee) {
+      chargee.current = demandee;
+      tontineId.current = null;
+      setTontine(null); setPaiements([]); setTotalPages(1); setEtat("chargement"); setMessage(null); setBusy(null);
+      setMembreId(""); setTourId(""); setMontant(""); setPreuve(""); setRejet(null); setMotif(""); setFiltre("tous");
+    }
+    fetchAll(page);
+  }, [demandee, page, fetchAll]);
 
   const tourOuvert = tontine?.tours.find((t) => t.status === "Ouvert");
   const cotisation = tontine?.montantCotisation ?? 0;
@@ -105,12 +139,15 @@ export default function PaiementsPage() {
     if (!tontine || !tourId || !membreId) return;
     setBusy("form");
     setMessage(null);
+    const cle = demandee;
     const res = await fetch("/api/versements/manuel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tontineId: tontine.id, tourId, membreId, montant: Number(montant), descriptionPreuve: preuve }),
     });
     const data = await res.json().catch(() => ({}));
+    // Another tontine chosen meanwhile: this answer is about the previous one.
+    if (chargee.current !== cle) return;
     setBusy(null);
     if (res.ok) {
       setMessage({ type: "ok", text: `Paiement de ${membreChoisi?.nom} enregistré. Il attend ${valide ? "votre validation ci-dessous" : "la validation du trésorier"}.` });
@@ -124,12 +161,15 @@ export default function PaiementsPage() {
   async function agir(id: string, action: "valider" | "rejeter", raison?: string) {
     setBusy(id);
     setMessage(null);
+    const cle = demandee;
     const res = await fetch(`/api/versements/${id}/${action}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(action === "rejeter" ? { raison } : {}),
     });
     const data = await res.json().catch(() => ({}));
+    // Another tontine chosen meanwhile: this answer is about the previous one.
+    if (chargee.current !== cle) return;
     setBusy(null);
     if (res.ok) {
       setMessage({ type: "ok", text: action === "valider" ? `Paiement validé · référence ${data.reference}` : "Paiement rejeté. Le membre redevient « à payer »." });
@@ -146,11 +186,9 @@ export default function PaiementsPage() {
   const aValider = paiements.filter((p) => p.status === "en_attente").length;
 
   if (etat === "hors_bureau" || etat === "aucune" || etat === "erreur") {
-    const [icone, titre, texte] = etat === "hors_bureau"
-      ? ["shield", "Vous n'êtes au bureau d'aucune tontine", MESSAGE_HORS_BUREAU]
-      : etat === "aucune"
-        ? ["users", "Aucune tontine pour le moment", "Créez votre tontine depuis l'application mobile : ses paiements apparaîtront ici."]
-        : ["alert", "Impossible de charger les paiements", "Le serveur n'a pas répondu correctement. Réessayez dans un instant."];
+    const [icone, titre, texte] = etat === "erreur"
+      ? ["alert", "Impossible de charger les paiements", "Le serveur n'a pas répondu correctement. Réessayez dans un instant."]
+      : ecranEchec(etat, demandee !== null, "ses paiements apparaîtront ici");
     return (
       <>
         <PageHeader eyebrow="Espace du bureau" title="Paiements" />

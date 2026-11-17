@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { formatDate, formatMontant, libelleAction, MESSAGE_HORS_BUREAU } from "@/lib/format";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
+import { formatDate, formatMontant, libelleAction } from "@/lib/format";
+import { echecDuStatut, ecranEchec, PARAM_TONTINE, requeteTontine, tontineDemandee, type EchecTontine } from "@/lib/tontine";
 import type { AuditEntriesResult, AuditEntryDto } from "@/lib/types";
 import { Card, EmptyState, Icon, PageHeader } from "@/components/ui";
 import Pagination from "@/components/Pagination";
@@ -24,42 +26,64 @@ function detail(e: AuditEntryDto): string | null {
 }
 
 export default function AuditTrailPage() {
+  // The page reads the chosen tontine from the URL (useSearchParams).
+  return <Suspense fallback={null}><JournalAudit /></Suspense>;
+}
+
+function JournalAudit() {
+  // The tontine chosen in the selector (?tontine=), else the API's default one.
+  const demandee = tontineDemandee(useSearchParams().get(PARAM_TONTINE));
   const [entries, setEntries] = useState<AuditEntryDto[]>([]);
-  const [page, setPage] = useState(1);
+  // The page number belongs to a tontine: another tontine chosen starts at its first page.
+  const [pagination, setPagination] = useState({ cle: demandee, page: 1 });
+  const page = pagination.cle === demandee ? pagination.page : 1;
+  const setPage = (p: number) => setPagination({ cle: demandee, page: p });
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [chaineValide, setChaineValide] = useState<boolean | null>(null);
   /** Last load failure: 403 → hors_bureau, 404 → aucune, anything else → erreur. */
-  const [echec, setEchec] = useState<"hors_bureau" | "aucune" | "erreur" | null>(null);
+  const [echec, setEchec] = useState<EchecTontine | null>(null);
+  // Only the latest load may update the page (a tontine change can overlap a load still running).
+  const dernier = useRef(0);
 
   const fetchAudit = useCallback(async (p: number) => {
+    const n = ++dernier.current;
     setLoading(true);
     try {
-      const res = await fetch(`/api/audit?page=${p}&pageSize=20`);
-      setEchec(res.ok ? null : res.status === 403 ? "hors_bureau" : res.status === 404 ? "aucune" : "erreur");
+      if (demandee === "invalide") { setEchec("aucune"); return; }
+      const res = await fetch(`/api/audit?page=${p}&pageSize=20${requeteTontine(demandee)}`);
+      if (n !== dernier.current) return;
+      setEchec(res.ok ? null : echecDuStatut(res.status));
       if (res.ok) {
         const data: AuditEntriesResult = await res.json();
+        if (n !== dernier.current) return;
         setEntries(data.entries);
         setChaineValide(data.chaineValide ?? null);
         setTotalPages(data.totalPages);
         setTotal(data.totalCount);
       }
     } catch {
-      setEchec("erreur");
+      if (n === dernier.current) setEchec("erreur");
     } finally {
-      setLoading(false);
+      if (n === dernier.current) setLoading(false);
     }
-  }, []);
+  }, [demandee]);
 
-  useEffect(() => { fetchAudit(page); }, [page, fetchAudit]);
+  // One load per (tontine, page); another tontine chosen first forgets everything shown for the previous one.
+  const chargee = useRef(demandee);
+  useEffect(() => {
+    if (chargee.current !== demandee) {
+      chargee.current = demandee;
+      setEntries([]); setChaineValide(null); setEchec(null); setTotal(0); setTotalPages(1);
+    }
+    fetchAudit(page);
+  }, [demandee, page, fetchAudit]);
 
   if (echec) {
-    const [icone, titre, texte] = echec === "hors_bureau"
-      ? ["shield", "Vous n'êtes au bureau d'aucune tontine", MESSAGE_HORS_BUREAU]
-      : echec === "aucune"
-        ? ["users", "Aucune tontine pour le moment", "Créez votre tontine depuis l'application mobile : son journal apparaîtra ici."]
-        : ["alert", "Impossible de charger le journal", "Le serveur n'a pas répondu correctement. Réessayez dans un instant."];
+    const [icone, titre, texte] = echec === "erreur"
+      ? ["alert", "Impossible de charger le journal", "Le serveur n'a pas répondu correctement. Réessayez dans un instant."]
+      : ecranEchec(echec, demandee !== null, "son journal apparaîtra ici");
     return (
       <>
         <PageHeader eyebrow="Espace du bureau" title="Journal d'audit" />

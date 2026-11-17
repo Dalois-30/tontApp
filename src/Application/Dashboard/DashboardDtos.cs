@@ -66,6 +66,9 @@ public sealed record DashTontineDto(
     // Roles of the caller on this tontine ("responsable", "tresorier", "admin"); set by the bureau's dashboard only.
     IReadOnlyList<string>? MesRoles = null);
 
+/// <summary>A tontine where the caller sits on the bureau, with their roles on it (tontine selector of the web dashboard).</summary>
+public sealed record DashTontineBureauDto(Guid Id, string Nom, string Status, IReadOnlyList<string> MesRoles);
+
 public sealed record DashVersementDto(
     Guid Id,
     decimal Montant,

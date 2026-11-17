@@ -4,7 +4,10 @@ using System.Net;
 using System.Text.Json.Nodes;
 using Domain.Gouvernance;
 using Domain.IdentityManagement.ValueObjects;
+using Domain.TontineManagement.ValueObjects;
 using FluentAssertions;
+using Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
@@ -232,6 +235,158 @@ public sealed class TableauDeBordBureauTests(ApiFactory api)
         (await admin.Get(Tableau)).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    // ── Sélecteur de tontine : les tontines du bureau de l'appelant ──
+
+    private const string MesTontines = "/api/v1/dashboard/gestionnaire/tontines";
+
+    private static (Guid Id, string[] Roles)[] Liste(JsonNode liste) =>
+        liste.AsArray().Select(x => ((Guid)x!["id"]!, x["mesRoles"]!.AsArray().Select(r => (string)r!).ToArray())).ToArray();
+
+    [Fact]
+    public async Task MesTontines_ResponsableDeT1_TresorierDeT2_ListeLesDeuxAvecSesRoles_EtChacuneSOuvre()
+    {
+        // Henri is responsable of T1 (elected; Gaston created it and stays trésorier) and trésorier of T2.
+        var henri = await api.CompteAsync("Henri Kamga");
+        var t1 = await TontineAsync();
+        await RejoindreEtAccepter(t1, henri);
+        await ElireResponsableParTous(t1, henri);
+        var t2 = await TontineAsync();
+        await RejoindreEtAccepter(t2, henri);
+        await NommerTresorier(t2, t2.Gaston, henri);
+
+        var liste = Liste(await henri.Lire(MesTontines));
+        liste.Select(x => x.Id).Should().BeEquivalentTo([t1.Id, t2.Id]);
+        liste.Single(x => x.Id == t1.Id).Roles.Should().BeEquivalentTo("responsable");
+        liste.Single(x => x.Id == t2.Id).Roles.Should().BeEquivalentTo("tresorier");
+        // The first one is the default tontine of the dashboard.
+        ((Guid)(await henri.Lire(Tableau))["id"]!).Should().Be(liste[0].Id);
+
+        // Choosing T1: its dashboard, payments and audit, with the responsable's rights.
+        Roles(await henri.Lire($"{Tableau}?tontineId={t1.Id}")).Should().BeEquivalentTo("responsable");
+        (await henri.Get($"/api/v1/dashboard/gestionnaire/versements?tontineId={t1.Id}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await henri.Get($"/api/v1/dashboard/gestionnaire/audit?tontineId={t1.Id}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await henri.Put($"/api/v1/tontines/{t1.Id}/regles", new { adhesionEnCours = "Libre", rattrapageAdhesionTardive = true }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Choosing T2, where he is only trésorier: running it stays refused.
+        Roles(await henri.Lire($"{Tableau}?tontineId={t2.Id}")).Should().BeEquivalentTo("tresorier");
+        (await henri.Put($"/api/v1/tontines/{t2.Id}/regles", new { adhesionEnCours = "Libre", rattrapageAdhesionTardive = true }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task MesTontines_ActivesAvantClotureesMemePlusRecentes_AvecLeurStatut()
+    {
+        var gaston = await api.CompteAsync("Gaston Responsable", RoleUtilisateur.Gestionnaire);
+        var ancienne = await TontineAsync(gaston);
+        var recente = await TontineAsync(gaston);
+        using (var scope = api.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<TontineDbContext>();
+            var tontineId = TontineId.From(recente.Id);
+            (await db.Tontines.SingleAsync(x => x.Id == tontineId)).Clore();
+            await db.SaveChangesAsync();
+        }
+
+        var liste = (await gaston.Lire(MesTontines)).AsArray();
+        liste.Select(x => (Guid)x!["id"]!).Should().Equal(ancienne.Id, recente.Id);
+        liste.Select(x => (string)x!["status"]!).Should().Equal("Active", "Completed");
+        liste.Select(x => (string)x!["nom"]!).Should().AllSatisfy(n => n.Should().NotBeNullOrEmpty());
+    }
+
+    [Fact]
+    public async Task MesTontines_CreateurRemplaceDansLesDeuxRoles_NEstPlusListe()
+    {
+        var t = await TontineAsync();
+        Liste(await t.Gaston.Lire(MesTontines)).Select(x => x.Id).Should().Contain(t.Id);
+
+        await ElireResponsable(t, t.Chloe);
+        await NommerTresorier(t, t.Chloe, t.Alice);
+
+        Liste(await t.Gaston.Lire(MesTontines)).Select(x => x.Id).Should().NotContain(t.Id);
+        Liste(await t.Chloe.Lire(MesTontines)).Single(x => x.Id == t.Id).Roles.Should().BeEquivalentTo("responsable");
+    }
+
+    [Fact]
+    public async Task MesTontines_UneSeule_PourUnTresorier()
+    {
+        var t = await TontineAsync();
+        await NommerTresorier(t, t.Gaston, t.Bruno);
+
+        var liste = Liste(await t.Bruno.Lire(MesTontines));
+        liste.Should().ContainSingle();
+        liste[0].Id.Should().Be(t.Id);
+        liste[0].Roles.Should().BeEquivalentTo("tresorier");
+    }
+
+    [Fact]
+    public async Task MesTontines_ChoixHorsBureau_Refuse()
+    {
+        var t = await TontineAsync();
+        var autre = await TontineAsync();
+
+        // Alice is a plain member: no tontine of hers; Gaston of T cannot open the other one.
+        (await t.Alice.Lire(MesTontines)).AsArray().Should().BeEmpty();
+        Liste(await t.Gaston.Lire(MesTontines)).Select(x => x.Id).Should().NotContain(autre.Id);
+        (await t.Gaston.Get($"{Tableau}?tontineId={autre.Id}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await t.Gaston.Get($"/api/v1/dashboard/gestionnaire/versements?tontineId={autre.Id}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await t.Gaston.Get($"/api/v1/dashboard/gestionnaire/audit?tontineId={autre.Id}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task MesTontines_Admin_SeulementOuIlSiege_MaisToutTontineIdExpliciteAccepte()
+    {
+        var etrangere = await TontineAsync();
+        var admin = await api.CompteAsync("Ada Admin", RoleUtilisateur.Admin);
+        (await admin.Lire(MesTontines)).AsArray().Should().BeEmpty();
+
+        var sienne = await TontineAsync(admin);
+        Liste(await admin.Lire(MesTontines)).Select(x => x.Id).Should().Equal(sienne.Id);
+
+        Roles(await admin.Lire($"{Tableau}?tontineId={etrangere.Id}")).Should().Equal("admin");
+    }
+
+    [Fact]
+    public async Task MesTontines_AdminAussiResponsable_AAdminEnPlusDeResponsable()
+    {
+        var t = await TontineAsync();
+        var admin = await api.CompteAsync("Ada Admin", RoleUtilisateur.Admin);
+        await RejoindreEtAccepter(t, admin);
+        await ElireResponsableParTous(t, admin);
+
+        Liste(await admin.Lire(MesTontines)).Single(x => x.Id == t.Id).Roles
+            .Should().BeEquivalentTo("responsable", "admin");
+    }
+
+    [Fact]
+    public async Task MesTontines_SansJeton_401()
+    {
+        using var client = api.CreateClient();
+        (await client.GetAsync(MesTontines)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    private static async Task RejoindreEtAccepter(Groupe t, Acteur nouveau)
+    {
+        var code = (string)(await t.Gaston.Lire($"/api/v1/tontines/{t.Id}/invitation/generer?nombreUsagesMax=5"))["code"]!;
+        await nouveau.Envoyer("/api/v1/tontines/rejoindre", new { code, memberName = nouveau.Nom });
+        var demande = (Guid)(await t.Gaston.Lire($"{Tableau}?tontineId={t.Id}"))["membres"]!.AsArray()
+            .First(m => (string)m!["statut"]! == "adhesion_en_attente")!["id"]!;
+        await t.Gaston.Envoyer($"/api/v1/tontines/{t.Id}/membres/{demande}/accepter");
+    }
+
+    /// <summary>Alice, Bruno and Chloé elect <paramref name="candidat"/> (a fourth member) as responsable.</summary>
+    private static async Task ElireResponsableParTous(Groupe t, Acteur candidat)
+    {
+        var etat = await t.Alice.Envoyer($"/api/v1/tontines/{t.Id}/votes/responsable", new { utilisateurId = candidat.Id });
+        var vote = (Guid)etat["votes"]!.AsArray().Single()!["id"]!;
+        foreach (var m in new[] { t.Alice, t.Bruno, t.Chloe, candidat })
+        {
+            etat = await m.Envoyer($"/api/v1/tontines/{t.Id}/votes/{vote}", new { pour = true });
+            if ((Guid?)etat["bureau"]!["responsableId"] == candidat.Id) break;
+        }
+        ((Guid)etat["bureau"]!["responsableId"]!).Should().Be(candidat.Id);
+    }
+
     // ── Repository on a real database: the candidate of an open vote ──
 
     [Fact]
@@ -254,4 +409,24 @@ public sealed class TableauDeBordBureauTests(ApiFactory api)
         (await bureaux.GetGroupesOuSiegeAsync(t.Chloe.Id, TypeGroupe.Tontine, maintenant)).Should().NotContain(t.Id);
         (await bureaux.GetGroupesOuSiegeAsync(t.Chloe.Id, TypeGroupe.Projet, maintenant.AddDays(8))).Should().NotContain(t.Id);
     }
+
+    [Fact]
+    public async Task IdentifiantVide_TontineIntrouvable_JamaisErreurServeur()
+    {
+        // "00000000-…" is a valid GUID that names no tontine (TontineId refuses it): 404, never a 500.
+        var t = await TontineAsync();
+        var vide = Guid.Empty;
+
+        foreach (var url in new[]
+        {
+            $"{Tableau}?tontineId={vide}",
+            $"/api/v1/dashboard/gestionnaire/versements?tontineId={vide}",
+            $"/api/v1/dashboard/gestionnaire/audit?tontineId={vide}",
+            $"/api/v1/tontines/{vide}/details",
+            $"/api/v1/tontines/{vide}/versements",
+            $"/api/v1/tontines/{vide}/audit",
+        })
+            (await t.Gaston.Get(url)).StatusCode.Should().Be(HttpStatusCode.NotFound, url);
+    }
 }
+

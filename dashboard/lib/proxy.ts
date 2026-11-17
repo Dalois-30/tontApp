@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { UUID_REGEX } from "./tontine";
+
+export { UUID_REGEX } from "./tontine";
 
 const API_BASE_URL = process.env.API_URL ?? "http://localhost:8080";
 
@@ -33,9 +36,6 @@ export async function proxyToApi(
     return NextResponse.json({ error: "Erreur de connexion au serveur" }, { status: 502 });
   }
 }
-
-export const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Builds a query string with only page/pageSize/tontineId, validated. */
 export function pagingQuery(request: NextRequest): string {
