@@ -12,7 +12,8 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { formatMontant } from '../../utils/format';
 import { colors, spacing } from '../../config/theme';
 import { s, Carte, Section, Ligne, Bouton, Puce, Tuile, Pastille } from '../../components/kit';
-import { useProjet, roles, BandeEcheances } from './projet/commun';
+import { useProjet, BandeEcheances } from './projet/commun';
+import { roles } from './projet/statuts';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ProjetDetail'>;
 

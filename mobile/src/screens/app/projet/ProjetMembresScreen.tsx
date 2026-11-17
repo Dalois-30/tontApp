@@ -7,7 +7,8 @@ import { s, Pastille, Puce, Vide } from '../../../components/kit';
 import { ErrorBanner } from '../../../components/ErrorBanner';
 import { formatMontant } from '../../../utils/format';
 import { colors, spacing } from '../../../config/theme';
-import { useProjet, BandeEcheances, STATUT_PARTICIPANT } from './commun';
+import { useProjet, BandeEcheances } from './commun';
+import { STATUT_PARTICIPANT } from './statuts';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ProjetMembres'>;
 type Filtre = 'tous' | 'retard' | 'ajour';

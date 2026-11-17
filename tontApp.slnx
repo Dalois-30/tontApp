@@ -1,15 +1,15 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/Api/Api.csproj" />
+    <Project Path="src/Api/Api.csproj" Id="4c3fd7cd-d40e-4303-a088-b3c70427c9a7" />
     <Project Path="src/Application/Application.csproj" Id="ce95dc37-dc99-4199-873f-442ad580234a" />
     <Project Path="src/Domain/Domain.csproj" Id="fcf20e51-96c7-41fd-9a47-6b89f8749877" />
     <Project Path="src/Infrastructure/Infrastructure.csproj" Id="9b739748-aebc-4c8b-9fa2-6d17136a2174" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/ApiTests/ApiTests.csproj" />
+    <Project Path="tests/ApiTests/ApiTests.csproj" Id="99e416a7-55a7-435f-93ef-f1585694e4db" />
     <Project Path="tests/AuthHandlerTests/AuthHandlerTests.csproj" Id="a1b2c3d4-e5f6-7890-abcd-ef1234567890" />
     <Project Path="tests/DomainUnitsTest/DomainUnitsTest.csproj" Id="99fb9ddb-2d76-4e60-ab70-41ad5ce0340d" />
-    <Project Path="tests/NotificationTests/NotificationTests.csproj" />
+    <Project Path="tests/NotificationTests/NotificationTests.csproj" Id="a9597ac6-0c3c-49bf-8ba3-5360b55a434c" />
     <Project Path="tests/PaymentIntegrationTests/PaymentIntegrationTests.csproj" Id="b2c3d4e5-f6a7-8901-bcde-f12345678901" />
   </Folder>
   <Project Path="docker-compose.dcproj">

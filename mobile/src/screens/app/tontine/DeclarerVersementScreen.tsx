@@ -15,7 +15,8 @@ import { spacing } from '../../../config/theme';
 import { useAuthStore } from '../../../store/authStore';
 import { tontineService } from '../../../services/tontineService';
 import { ChoixPersonne } from '../projet/commun';
-import { useTontine, rolesTontine, monMembre, toursDus, messageErreur } from './commun';
+import { useTontine, messageErreur } from './commun';
+import { rolesTontine, monMembre, toursDus } from './logique';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'DeclarerVersement'>;
 

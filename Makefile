@@ -1,8 +1,8 @@
 # Commandes de dev locales (voir scripts/dev.sh)
-.PHONY: help up down api test build restart logs psql reset seed otp dashboard mobile
+.PHONY: help up down api test test-lots test-front build restart logs psql reset seed otp dashboard mobile
 
 help: ## Liste des commandes
-	@grep -E '^[a-z]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-8s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
 
 up: ## Démarre Postgres (5433) + Redis (6380)
 	./scripts/dev.sh up
@@ -18,6 +18,9 @@ test: ## Lance tous les tests
 
 test-lots: ## Tests un projet à la fois, selon la mémoire disponible
 	./scripts/test-par-lots.sh
+
+test-front: ## Typage, lint et tests du web puis du mobile (comme la CI)
+	./scripts/test-front.sh
 
 build: ## Compile la solution
 	PATH="$$HOME/.dotnet:$$PATH" DOTNET_ROOT="$$HOME/.dotnet" dotnet build tontApp.slnx

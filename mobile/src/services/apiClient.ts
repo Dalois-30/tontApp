@@ -9,7 +9,6 @@
 
 import axios, {
   AxiosError,
-  AxiosRequestConfig,
   InternalAxiosRequestConfig,
 } from 'axios';
 import {
@@ -27,6 +26,8 @@ interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   _isRetry?: boolean;
 }
 
+// axios.create is the documented way to make an instance (the named `create` export is the same function).
+// eslint-disable-next-line import/no-named-as-default-member
 const apiClient = axios.create({
   baseURL: `${API_BASE_URL}${API_PREFIX}`,
   timeout: REQUEST_TIMEOUT_MS,

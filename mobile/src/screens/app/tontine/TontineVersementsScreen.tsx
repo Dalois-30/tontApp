@@ -12,7 +12,8 @@ import { ErrorBanner } from '../../../components/ErrorBanner';
 import { formatMontant } from '../../../utils/format';
 import { colors, spacing } from '../../../config/theme';
 import { tontineService, type VersementTontine } from '../../../services/tontineService';
-import { useTontine, useVersements, rolesTontine, STATUT_VERSEMENT, messageErreur } from './commun';
+import { useTontine, useVersements, messageErreur } from './commun';
+import { rolesTontine, STATUT_VERSEMENT } from './logique';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'TontineVersements'>;
 type Filtre = 'tous' | VersementTontine['status'];

@@ -45,7 +45,9 @@ export async function apiFetch<T>(
     throw new ApiError(response.status, `API ${response.status}: ${error}`);
   }
 
-  return response.json() as Promise<T>;
+  // 204 No Content (or any empty body): nothing to parse.
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 /**

@@ -8,7 +8,8 @@ import { ErrorBanner } from '../../../components/ErrorBanner';
 import { formatMontant } from '../../../utils/format';
 import { colors, spacing } from '../../../config/theme';
 import type { PaiementProjet } from '../../../services/projetService';
-import { useProjet, PAIEMENT, moyen } from './commun';
+import { useProjet } from './commun';
+import { PAIEMENT, moyen } from './statuts';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ProjetPaiements'>;
 type Filtre = 'tous' | PaiementProjet['statut'];

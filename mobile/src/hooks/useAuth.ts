@@ -16,7 +16,7 @@ import { AxiosError } from 'axios';
 import { authService } from '../services/authService';
 import { useAuthStore, type UserInfo } from '../store/authStore';
 import { useTontineStore } from '../store/tontineStore';
-import type { ApiError, AuthResult, RegisterResult } from '../types/api';
+import type { ApiError, AuthResult } from '../types/api';
 
 interface UseAuthReturn {
   /** Log in with phone and password */

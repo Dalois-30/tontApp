@@ -11,7 +11,8 @@ import { ErrorBanner } from '../../../components/ErrorBanner';
 import { formatMontant } from '../../../utils/format';
 import { spacing } from '../../../config/theme';
 import { projetService, messageErreur } from '../../../services/projetService';
-import { useProjet, roles, ChoixPersonne } from './commun';
+import { useProjet, ChoixPersonne } from './commun';
+import { roles } from './statuts';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'DeclarerPaiement'>;
 

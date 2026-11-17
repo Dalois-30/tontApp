@@ -37,11 +37,17 @@ export async function proxyToApi(
   }
 }
 
+/** Whole number ≥ 1 read from a query value (decimals floored); the default when absent, not finite or < 1. */
+function entierPositif(valeur: string | null, defaut: number): number {
+  const n = Math.floor(Number(valeur));
+  return valeur !== null && Number.isFinite(n) && n >= 1 ? n : defaut;
+}
+
 /** Builds a query string with only page/pageSize/tontineId, validated. */
 export function pagingQuery(request: NextRequest): string {
   const sp = request.nextUrl.searchParams;
-  const page = Math.max(1, Number(sp.get("page") ?? 1) || 1);
-  const pageSize = Math.min(100, Math.max(1, Number(sp.get("pageSize") ?? 20) || 20));
+  const page = entierPositif(sp.get("page"), 1);
+  const pageSize = Math.min(100, entierPositif(sp.get("pageSize"), 20));
   const tontineId = sp.get("tontineId");
   const t = tontineId && UUID_REGEX.test(tontineId) ? `&tontineId=${tontineId}` : "";
   return `page=${page}&pageSize=${pageSize}${t}`;

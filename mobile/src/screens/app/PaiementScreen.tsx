@@ -41,7 +41,6 @@ export function PaiementScreen({ route, navigation }: Props): React.JSX.Element 
   const [phase, setPhase] = useState<PaymentPhase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [pollProgress, setPollProgress] = useState(0);
-  const [versementId, setVersementId] = useState<string | null>(null);
 
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
@@ -123,7 +122,6 @@ export function PaiementScreen({ route, navigation }: Props): React.JSX.Element 
         tourId,
         montant,
       });
-      setVersementId(response.versementId);
       setPhase('polling');
       startPolling(response.versementId);
     } catch (e: unknown) {
@@ -140,7 +138,6 @@ export function PaiementScreen({ route, navigation }: Props): React.JSX.Element 
     setPhase('idle');
     setError(null);
     setPollProgress(0);
-    setVersementId(null);
   }, []);
 
   const handleGoBack = useCallback(() => {

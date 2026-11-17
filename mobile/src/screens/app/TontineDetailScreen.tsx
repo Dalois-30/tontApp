@@ -33,11 +33,10 @@ import {
   colors,
   spacing,
   fontSizes,
-  borderRadius,
 } from '../../config/theme';
 import { QUERY_STALE_TIME_MS, QUERY_CACHE_TIME_MS } from '../../config/constants';
 import { gouvernanceService } from '../../services/gouvernanceService';
-import { rolesTontine, monMembre, toursDus } from './tontine/commun';
+import { rolesTontine, monMembre, toursDus } from './tontine/logique';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'TontineDetail'>;
 

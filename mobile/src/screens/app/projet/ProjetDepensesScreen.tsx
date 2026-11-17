@@ -8,7 +8,8 @@ import { ErrorBanner } from '../../../components/ErrorBanner';
 import { formatMontant } from '../../../utils/format';
 import { colors, spacing } from '../../../config/theme';
 import { projetService, messageErreur } from '../../../services/projetService';
-import { useProjet, roles, PAIEMENT } from './commun';
+import { useProjet } from './commun';
+import { roles, PAIEMENT } from './statuts';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ProjetDepenses'>;
 

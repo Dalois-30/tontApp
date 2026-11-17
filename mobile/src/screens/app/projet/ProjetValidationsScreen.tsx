@@ -11,7 +11,8 @@ import { ErrorBanner } from '../../../components/ErrorBanner';
 import { formatMontant } from '../../../utils/format';
 import { colors, spacing } from '../../../config/theme';
 import { projetService, messageErreur, type ProjetDetails } from '../../../services/projetService';
-import { useProjet, roles, moyen } from './commun';
+import { useProjet } from './commun';
+import { roles, moyen } from './statuts';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ProjetValidations'>;
 

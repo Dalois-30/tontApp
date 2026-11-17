@@ -11,7 +11,8 @@ import { ErrorBanner } from '../../../components/ErrorBanner';
 import { formatMontant } from '../../../utils/format';
 import { colors, spacing } from '../../../config/theme';
 import { projetService, messageErreur, type Participant, type ProjetDetails } from '../../../services/projetService';
-import { useProjet, roles, ECHEANCE, PAIEMENT, STATUT_PARTICIPANT, moyen } from './commun';
+import { useProjet } from './commun';
+import { roles, ECHEANCE, PAIEMENT, STATUT_PARTICIPANT, moyen } from './statuts';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ProjetMembre'>;
 

@@ -5,11 +5,11 @@
  */
 
 import apiClient from './apiClient';
+import { mapStatutPaiement } from './statutPaiement';
 import type {
   TontineSummary,
   TontineDetail,
   TontineStatus,
-  StatutPaiement,
   MembreRetardataire,
   RelancerSmsRequest,
   CloreTourResponse,
@@ -99,17 +99,6 @@ interface BackendTontineDetailsDto {
   createdAt: string;
   gestionnaireId: string;
   gestionnaireNom: string | null;
-}
-
-function mapStatutPaiement(statut: string): StatutPaiement | undefined {
-  if (statut === 'paye') return 'paye';
-  if (statut === 'paye_partiel') return 'paye_partiel';
-  if (statut === 'en_retard') return 'en_retard';
-  if (statut === 'en_attente') return 'en_attente';
-  if (statut === 'a_payer') return 'a_payer';
-  if (statut === 'adhesion_en_attente') return 'adhesion_en_attente';
-  if (statut === 'non_du') return 'non_du';
-  return undefined; // beneficiaire, suspendu
 }
 
 function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {

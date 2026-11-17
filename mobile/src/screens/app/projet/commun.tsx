@@ -1,11 +1,12 @@
-/** Shared helpers of the collective-project screens: data hook, status labels, member picker. */
+/** Shared React helpers of the collective-project screens: data hook, instalment strip, member picker (rules and labels: statuts.ts). */
 import React, { useCallback, useMemo, useState } from 'react';
 import { Modal, View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from '@react-navigation/native';
-import { projetService, type ProjetDetails, type Echeance, type PaiementProjet, type Participant } from '../../../services/projetService';
-import { s as k, tons, type Ton } from '../../../components/kit';
+import { projetService, type ProjetDetails, type Echeance } from '../../../services/projetService';
+import { s as k, tons } from '../../../components/kit';
 import { colors, spacing } from '../../../config/theme';
+import { ECHEANCE } from './statuts';
 
 /** The project, refreshed when the screen regains focus; `remplacer` stores a mutation's result. */
 export function useProjet(projetId: string) {
@@ -17,33 +18,6 @@ export function useProjet(projetId: string) {
   return { ...q, remplacer };
 }
 
-export const roles = (p?: ProjetDetails) => ({
-  responsable: !!p && (p.mesRoles.includes('responsable') || p.mesRoles.includes('admin')),
-  tresorier: !!p && (p.mesRoles.includes('tresorier') || p.mesRoles.includes('admin')),
-});
-
-export const ECHEANCE: Record<Echeance['statut'], { label: string; ton: Ton }> = {
-  soldee: { label: 'Soldée', ton: 'bon' },
-  partielle: { label: 'Partielle', ton: 'attente' },
-  en_retard: { label: 'En retard', ton: 'mauvais' },
-  a_venir: { label: 'À venir', ton: 'neutre' },
-};
-
-export const PAIEMENT: Record<PaiementProjet['statut'], { label: string; ton: Ton }> = {
-  valide: { label: 'Validé', ton: 'bon' },
-  en_attente: { label: 'À valider', ton: 'attente' },
-  rejete: { label: 'Rejeté', ton: 'mauvais' },
-};
-
-export const STATUT_PARTICIPANT: Record<Participant['statut'], { label: string; ton: Ton }> = {
-  Actif: { label: 'Actif', ton: 'bon' },
-  Suspendu: { label: 'Suspendu', ton: 'attente' },
-  Demissionnaire: { label: 'Démissionnaire', ton: 'neutre' },
-  Exclu: { label: 'Exclu', ton: 'mauvais' },
-};
-
-/** "Import du registre · OM" -> "OM" ; any other proof is shown as entered. */
-export const moyen = (preuve: string) => preuve.replace(/^Import du registre · /, '');
 
 /** Strip of the instalments already due: one cell per instalment, coloured by status (with a text summary next to it). */
 export function BandeEcheances({ echeances }: { echeances: Echeance[] }) {
