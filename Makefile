@@ -1,5 +1,5 @@
 # Commandes de dev locales (voir scripts/dev.sh)
-.PHONY: help up down api test test-lots test-front build restart logs psql reset seed otp dashboard mobile mobile-apk
+.PHONY: help up down api test test-lots test-front build restart logs psql reset seed donnees-tutoriel otp dashboard mobile mobile-apk
 
 help: ## Liste des commandes
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -39,6 +39,9 @@ reset: ## Efface la base de dev (volume Postgres) et relance l'infra
 
 seed: ## Crée les comptes et la tontine de démo (API lancée) ; CLASSEUR=fichier.xlsx importe aussi un projet
 	DEMO_CLASSEUR="$(CLASSEUR)" ./scripts/demo.sh seed
+
+donnees-tutoriel: ## Après make seed CLASSEUR=… : tontine, trésorière, séance et déclarations filmées dans docs/tutoriel
+	python3 scripts/donnees_tutoriel.py
 
 otp: ## Affiche le code OTP d'un numéro : make otp TEL=+237670000010
 	@./scripts/demo.sh otp $(TEL)

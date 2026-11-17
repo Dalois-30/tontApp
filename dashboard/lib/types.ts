@@ -234,4 +234,7 @@ export interface ProjetDetails {
   paiements: PaiementProjet[];
   depenses: DepenseProjet[];
   journal: { sequence: number; action: string; acteur: string; horodatage: string; hash: string }[] | null;
+  /** Caller's roles in the project bureau: responsable runs it, trésorier validates. */
+  mesRoles?: string[];
+  bureau?: { responsableId: string; responsableNom: string; tresorierId: string; tresorierNom: string };
 }

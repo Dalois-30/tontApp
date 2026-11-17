@@ -6,6 +6,7 @@ import { formatMontant, formatDate, formatJour, libelleAction, libellePeriodicit
 import type { ProjetDetails, ReglesProjet } from "@/lib/types";
 import { Badge, Card, EmptyState, Icon, Meter, PageHeader } from "@/components/ui";
 import ReglesProjetForm from "@/components/ReglesProjetForm";
+import { peutGerer, peutValider } from "@/lib/format";
 import CollecteChart, { type CollectePoint } from "@/components/charts/CollecteChart";
 import { useTontineChoisie } from "@/components/Sidebar";
 import { avecTontine } from "@/lib/tontine";
@@ -94,6 +95,10 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
     .sort((a, b) => Number(b.statut === "en_attente") - Number(a.statut === "en_attente") || b.saisiLe.localeCompare(a.saisiLe));
   const listePaiements = toutVoir ? paiementsFiltres : paiementsFiltres.slice(0, 10);
   const modifiable = p.statut === "Brouillon" || p.statut === "Ouvert";
+  // Same rights as the API: the responsable runs the project, the trésorier validates.
+  const gere = peutGerer(p);
+  const valide = peutValider(p);
+  const tresorier = p.bureau?.tresorierNom ?? "le trésorier";
 
   function choisirPayeur(pid: string) {
     setPayeur(pid);
@@ -109,9 +114,9 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
         badge={<Badge status={p.statut} label={libelleStatutGroupe(p.statut)} />}
         subtitle={p.description ?? undefined}
         actions={<>
-          {modifiable && <button disabled={busy} onClick={() => action("/invitation?expirationJours=30", {}, "Code d'invitation généré, valable 30 jours.")} className="btn-secondary"><Icon name="key" />Code d&apos;invitation</button>}
-          {p.statut === "Brouillon" && <button disabled={busy} onClick={() => action("/ouvrir", {}, "Projet ouvert : vous pouvez enregistrer des paiements.")} className="btn-primary">Ouvrir le projet</button>}
-          {p.statut === "Ouvert" && <button disabled={busy} onClick={() => action("/clore", {}, "Projet clos.")} className="btn-secondary">Clore</button>}
+          {modifiable && gere && <button disabled={busy} onClick={() => action("/invitation?expirationJours=30", {}, "Code d'invitation généré, valable 30 jours.")} className="btn-secondary"><Icon name="key" />Code d&apos;invitation</button>}
+          {p.statut === "Brouillon" && gere && <button disabled={busy} onClick={() => action("/ouvrir", {}, "Projet ouvert : vous pouvez enregistrer des paiements.")} className="btn-primary">Ouvrir le projet</button>}
+          {p.statut === "Ouvert" && gere && <button disabled={busy} onClick={() => action("/clore", {}, "Projet clos.")} className="btn-secondary">Clore</button>}
         </>}
       >
         <p className="text-[13px] text-muted">
@@ -158,15 +163,15 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
       )}
 
       {demandes.length > 0 && (
-        <Card className="border-info/40" title={`Changements de palier à valider (${demandes.length})`} subtitle="Les règles du projet soumettent ces changements à votre accord.">
+        <Card className="border-info/40" title={`Changements de palier à valider (${demandes.length})`} subtitle={valide ? "Les règles du projet soumettent ces changements à votre accord." : `Les règles du projet soumettent ces changements à l'accord de ${tresorier}.`}>
           <ul className="divide-y divide-line" data-testid="demandes-palier">
             {demandes.map((x) => (
               <li key={x.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                 <span className="text-ink"><span className="font-medium">{x.nom}</span> · {formatMontant(x.palierActuel)} <Icon name="arrow" className="inline h-3.5 w-3.5 text-muted" /> <span className="font-medium">{formatMontant(x.palierDemande!)}</span></span>
-                <span className="flex gap-2">
+                {valide ? <span className="flex gap-2">
                   <button disabled={busy} onClick={() => action(`/participants/${x.id}/changement-palier/refuser`, {}, `Changement refusé : ${x.nom} garde son palier.`)} className="btn-secondary btn-sm">Refuser</button>
                   <button disabled={busy} onClick={() => action(`/participants/${x.id}/changement-palier/approuver`, {}, `Changement approuvé pour ${x.nom}.`)} className="btn-primary btn-sm"><Icon name="check" className="h-3.5 w-3.5" />Approuver</button>
-                </span>
+                </span> : <span className="text-[12px] text-muted">À décider par {tresorier}</span>}
               </li>
             ))}
           </ul>
@@ -174,7 +179,7 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
       )}
 
       <Card title={`Participants (${p.participants.length})`} bodyClassName="pt-3"
-        actions={modifiable ? <button onClick={() => setInscription((v) => !v)} className="btn-secondary btn-sm"><Icon name="plus" className="h-3.5 w-3.5" />Inscrire un participant</button> : undefined}
+        actions={modifiable && gere ? <button onClick={() => setInscription((v) => !v)} className="btn-secondary btn-sm"><Icon name="plus" className="h-3.5 w-3.5" />Inscrire un participant</button> : undefined}
         subtitle="Triés par reste dû. Une case par échéance ; un trop-perçu se reporte sur les suivantes. Cliquez sur une ligne pour le détail.">
         {inscription && (
           <form className="mx-5 md:mx-6 mb-4 grid grid-cols-1 md:grid-cols-[1.5fr_1fr_auto_auto] gap-3 items-end rounded-lg border border-line bg-surface-2 p-3"
@@ -242,7 +247,7 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
         </div>
       </Card>
 
-      <Card title="Paiements" subtitle={enAttente > 0 ? `${enAttente} paiement(s) attendent votre validation.` : "Enregistrez un versement reçu, puis validez-le après vérification."}>
+      <Card title="Paiements" subtitle={enAttente > 0 ? (valide ? `${enAttente} paiement(s) attendent votre validation.` : `${enAttente} paiement(s) attendent la validation de ${tresorier}.`) : "Enregistrez un versement reçu, puis validez-le après vérification."}>
         {p.statut !== "Ouvert" ? (
           <EmptyState icon="cash" title="Projet non ouvert">Ouvrez le projet pour enregistrer des paiements.</EmptyState>
         ) : (
@@ -309,7 +314,8 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
                   <td><Badge status={x.statut} /></td>
                   <td className="text-ink-2 whitespace-nowrap">{formatDate(x.saisiLe)}</td>
                   <td className="text-right whitespace-nowrap">
-                    {x.statut === "en_attente" ? (
+                    {x.statut === "en_attente" && !valide ? <span className="text-[12px] text-muted">À valider par {tresorier}</span>
+                    : x.statut === "en_attente" ? (
                       <span className="inline-flex gap-2">
                         <button disabled={busy} onClick={() => setARejeter({ type: "paiements", id: x.id, nom: x.participantNom })} className="btn-secondary btn-sm">Rejeter</button>
                         <button disabled={busy} onClick={() => action(`/paiements/${x.id}/valider`, {}, `Paiement de ${x.participantNom} validé.`)} className="btn-primary btn-sm"><Icon name="check" className="h-3.5 w-3.5" />Valider</button>
@@ -331,7 +337,7 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
       </Card>
 
       <Card title="Dépenses" subtitle={`Une dépense ne peut pas dépasser le solde disponible (${formatMontant(p.solde)}).${depensesEnAttente ? ` ${depensesEnAttente} à valider.` : ""}`}>
-        {p.statut === "Ouvert" && (
+        {p.statut === "Ouvert" && gere && (
           <form onSubmit={async (e) => {
               e.preventDefault();
               if (await action("/depenses", { libelle, montant: Number(montantDepense), justificatif }, "Dépense proposée : validez-la après vérification du justificatif.")) {
@@ -357,7 +363,8 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
                   <td className="text-ink-2">{d.justificatif}</td>
                   <td><Badge status={d.statut} /></td>
                   <td className="text-right whitespace-nowrap">
-                    {d.statut === "en_attente" ? (
+                    {d.statut === "en_attente" && !valide ? <span className="text-[12px] text-muted">À valider par {tresorier}</span>
+                    : d.statut === "en_attente" ? (
                       <span className="inline-flex gap-2">
                         <button disabled={busy} onClick={() => setARejeter({ type: "depenses", id: d.id, nom: d.libelle })} className="btn-secondary btn-sm">Rejeter</button>
                         <button disabled={busy} onClick={() => action(`/depenses/${d.id}/valider`, {}, `Dépense « ${d.libelle} » validée.`)} className="btn-primary btn-sm"><Icon name="check" className="h-3.5 w-3.5" />Valider</button>
@@ -373,7 +380,7 @@ export default function ProjetPage({ params }: { params: Promise<{ id: string }>
 
       <Card title="Règles du projet" id="regles"
         subtitle="Chaque modification est inscrite au journal. Un changement de palier déjà fait garde la règle en vigueur au moment de sa demande."
-        actions={modifiable ? (regles === null
+        actions={modifiable && gere ? (regles === null
           ? <button onClick={() => setRegles(p.regles)} className="btn-secondary btn-sm"><Icon name="settings" className="h-3.5 w-3.5" />Modifier</button>
           : <span className="flex gap-2">
               <button onClick={() => setRegles(null)} className="btn-ghost btn-sm">Annuler</button>
