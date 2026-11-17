@@ -32,25 +32,33 @@ export function formatJour(dateStr: string): string {
 /**
  * Label of a member's status in the open round when part of it is paid or pending. A partly paid round is
  * never shown as a plain "Payé": "Payé partiellement · reste 6 000 FCFA" (and/or "· 6 000 FCFA à valider");
- * a pending payment smaller than the contribution: "4 000 FCFA à valider · reste 6 000 FCFA".
+ * a pending payment smaller than the contribution: "4 000 FCFA à valider · reste 6 000 FCFA";
+ * a round covered by carry-over: "Payé · dont 3 000 FCFA reportés"; pending beyond what the round owes:
+ * "8 000 FCFA à valider (dont 3 000 FCFA en excédent)".
  * undefined: the default label of the status applies.
  */
-export function libelleStatutMembre(m: { statut: string; resteTour?: number; enAttenteTour?: number }): string | undefined {
+export function libelleStatutMembre(m: {
+  statut: string; resteTour?: number; enAttenteTour?: number; reporteTour?: number; enAttenteExcedentTour?: number;
+}): string | undefined {
   const reste = m.resteTour ?? 0;
   const aValider = m.enAttenteTour ?? 0;
-  if (m.statut === "paye_partiel") {
-    const parts = ["Payé partiellement"];
-    if (reste > 0) parts.push(`reste ${formatMontant(reste)}`);
-    if (aValider > 0) parts.push(`${formatMontant(aValider)} à valider`);
-    return parts.join(" · ");
+  const excedent = m.enAttenteExcedentTour ?? 0;
+  const attente = aValider > 0
+    ? `${formatMontant(aValider)} à valider${excedent > 0 ? ` (dont ${formatMontant(excedent)} en excédent)` : ""}` : "";
+  const reportes = (m.reporteTour ?? 0) > 0 ? `dont ${formatMontant(m.reporteTour ?? 0)} reportés` : "";
+  if (m.statut === "paye") {
+    const parts = ["Payé", reportes, attente].filter(Boolean);
+    return parts.length > 1 ? parts.join(" · ") : undefined;
   }
-  if (m.statut === "en_attente" && reste > 0)
-    return `${aValider > 0 ? `${formatMontant(aValider)} à valider` : "En attente"} · reste ${formatMontant(reste)}`;
+  if (m.statut === "paye_partiel")
+    return ["Payé partiellement", reste > 0 ? `reste ${formatMontant(reste)}` : "", reportes, attente].filter(Boolean).join(" · ");
+  if (m.statut === "en_attente" && (reste > 0 || excedent > 0))
+    return [attente || "En attente", reste > 0 ? `reste ${formatMontant(reste)}` : ""].filter(Boolean).join(" · ");
   return undefined;
 }
 
 /** Statuses of members who owe nothing on the open round, whatever the amounts. */
-const SANS_DU = new Set(["beneficiaire", "suspendu", "adhesion_en_attente"]);
+const SANS_DU = new Set(["beneficiaire", "non_du", "suspendu", "adhesion_en_attente"]);
 
 /** Whether the member still owes something on the open round (a reminder can be sent). */
 export function doitSurLeTour(m: { statut: string; resteTour?: number }, cotisation: number): boolean {

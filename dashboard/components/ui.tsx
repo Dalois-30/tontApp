@@ -96,7 +96,7 @@ const STATUTS: Record<string, [string, Tone]> = {
   paye: ["Payé", "good"], paye_partiel: ["Payé partiellement", "serious"], confirme: ["Validé", "good"], valide: ["Validé", "good"], soldee: ["Soldée", "good"],
   en_attente: ["En attente", "warn"], partielle: ["Partielle", "warn"], a_payer: ["À payer", "neutral"],
   a_venir: ["À venir", "neutral"], en_retard: ["En retard", "bad"], rejete: ["Rejeté", "bad"],
-  beneficiaire: ["Bénéficiaire", "info"], suspendu: ["Suspendu", "neutral"], adhesion_en_attente: ["À valider", "info"],
+  beneficiaire: ["Bénéficiaire", "info"], non_du: ["Non dû", "neutral"], suspendu: ["Suspendu", "neutral"], adhesion_en_attente: ["À valider", "info"],
   Active: ["Active", "good"], Ouvert: ["Ouvert", "good"], Draft: ["Brouillon", "neutral"], Brouillon: ["Brouillon", "neutral"],
   Completed: ["Terminée", "info"], Clos: ["Clos", "info"], Suspended: ["Suspendue", "warn"], Cancelled: ["Annulée", "bad"],
   Annule: ["Annulé", "bad"], critical: ["Critique", "bad"], warning: ["Attention", "serious"], info: ["Info", "info"],

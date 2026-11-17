@@ -3,6 +3,7 @@ namespace Application.PaymentManagement.Commands.EnregistrerVersementManuel;
 using System.Text.Json;
 using Application.Common;
 using Application.PaymentManagement.Services;
+using Application.TontineManagement.Services;
 using Domain.Common;
 using Domain.PaymentManagement;
 using Domain.PaymentManagement.Repositories;
@@ -57,29 +58,34 @@ public sealed class EnregistrerVersementManuelCommandHandler
         if (membre.Statut != StatutMembre.Actif)
             return Result<Guid>.Failure("Only an active member can pay a contribution.");
 
-        // The open round, or a past round the member owes (catch-up rule of the tontine).
+        // The open round, or a past round the member owes (catch-up rule of the tontine). A payment on any
+        // other round would count for no round: refused (the beneficiary, a late member without catch-up).
         if (tontine.ToursDusPar(membre.Id).All(r => r.Id.Value != request.TourId))
-            return Result<Guid>.Failure("This member does not owe a contribution for this round.");
+        {
+            var tour = tontine.Rounds.First(r => r.Id.Value == request.TourId);
+            return Result<Guid>.Failure(tour.BeneficiaryId == membre.Id
+                ? $"{membre.Name} est le bénéficiaire du tour {tour.RoundNumber} : il ne doit pas de cotisation sur ce tour."
+                : $"{membre.Name} ne doit pas de cotisation sur le tour {tour.RoundNumber} (tour ouvert avant son adhésion, sans rattrapage).");
+        }
 
         var tourId = TourId.From(request.TourId);
         var payeurId = PayeurId.From(request.MembreId);
 
-        // A partial payment leaves the rest due: a complement is accepted until validated + pending
-        // covers the contribution; beyond that the round is settled (or awaiting validation).
-        var existingVersements = await _versementRepository.GetByTontineAndTourAsync(
-            tontineId, tourId, cancellationToken);
-
-        var siens = existingVersements.Where(v => v.PayeurId == payeurId && v.Statut != VersementStatus.Echoue).ToList();
-        var valide = siens.Where(v => v.Statut == VersementStatus.Confirme).Sum(v => v.Montant.Valeur);
-        var enAttente = siens.Where(v => v.Statut == VersementStatus.EnAttente).Sum(v => v.Montant.Valeur);
-        var cotisation = tontine.ContributionAmount.Amount;
-        if (siens.Count > 0 && valide + enAttente >= cotisation)
+        // Single contribution rule: a declaration is accepted while the round is not covered by validated
+        // money (including the surplus carried over from other rounds) + pending declarations. Any amount is
+        // accepted, even beyond what is left: the validated surplus is carried over to the other rounds.
+        var versementsTontine = await _versementRepository.GetByTontineAsync(tontineId, cancellationToken);
+        var situationTour = tontine.SituationDe(membre.Id, versementsTontine).Tour(request.TourId);
+        if (situationTour is { Couvert: true })
         {
             var fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
-            return Result<Guid>.Failure(enAttente > 0
+            return Result<Guid>.Failure(situationTour.EnAttente > 0
                 ? $"Un versement est déjà déclaré pour {membre.Name} sur ce tour et la cotisation est couverte "
-                  + $"({valide.ToString("N0", fr)} FCFA validés, {enAttente.ToString("N0", fr)} FCFA en attente de validation) : rien de plus n'est dû."
-                : $"La cotisation de {membre.Name} sur ce tour est déjà entièrement payée et validée : rien de plus n'est dû.");
+                  + $"({situationTour.Valide.ToString("N0", fr)} FCFA validés, {situationTour.EnAttente.ToString("N0", fr)} FCFA en attente de validation) : rien de plus n'est dû."
+                : situationTour.Reporte > 0
+                    ? $"La cotisation de {membre.Name} sur ce tour est déjà couverte par le surplus validé sur d'autres tours "
+                      + $"({situationTour.Reporte.ToString("N0", fr)} FCFA reportés) : rien de plus n'est dû."
+                    : $"La cotisation de {membre.Name} sur ce tour est déjà entièrement payée et validée : rien de plus n'est dû.");
         }
 
         // Build hash chain from last versement for this tontine

@@ -46,21 +46,23 @@ export const monMembre = (t: TontineDetail | undefined, userId: string | undefin
 export type TourDu = TontineTour & { reste: number };
 
 /**
- * Rounds a member can declare a payment for: the open round while validated + pending does not cover
- * the contribution (a partial payment leaves the rest due), then the past rounds they still owe (catch-up).
+ * Rounds a member can declare a payment for, from the server's remainders (after the surplus carry-over):
+ * the open round while validated + pending does not cover the contribution, then the past rounds they still
+ * owe (catch-up). A round with nothing left (covered, or not owed) is never offered.
  */
 export function toursDus(t: TontineDetail | undefined, m: TontineMember | undefined): TourDu[] {
   if (!t || !m || m.statutTour === 'suspendu' || m.statutTour === 'adhesion_en_attente') return [];
+  const nonDuOuvert = m.statutTour === 'non_du' || m.statutTour === 'beneficiaire';
   const dus: TourDu[] = [];
   const ouvert = t.tours.find((x) => x.estOuvert);
   // Older API without resteTour: fall back on the status.
   const resteOuvert = m.resteTour ?? (m.statutTour === 'a_payer' || m.statutTour === 'en_retard' ? t.montantCotisation : 0);
-  if (ouvert && m.statutTour !== 'beneficiaire' && resteOuvert > 0) dus.push({ ...ouvert, reste: resteOuvert });
+  if (ouvert && !nonDuOuvert && resteOuvert > 0) dus.push({ ...ouvert, reste: resteOuvert });
   (m.toursImpayes ?? []).forEach((n, i) => {
     const tour = t.tours.find((x) => x.numero === n);
     if (tour && !tour.estOuvert) dus.push({ ...tour, reste: m.restesImpayes?.[i] ?? t.montantCotisation });
   });
-  return dus;
+  return dus.filter((x) => x.reste > 0);
 }
 
 export const STATUT_VERSEMENT: Record<VersementTontine['status'], { label: string; ton: Ton }> = {

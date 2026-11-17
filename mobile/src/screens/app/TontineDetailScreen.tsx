@@ -186,9 +186,18 @@ export function TontineDetailScreen({
                 Reste dû : {formatMontant(member.resteDu)} (tours {member.toursImpayes?.join(', ')})
               </Text>
             ) : null}
+            {(member.avance ?? 0) > 0 ? (
+              <Text style={styles.memberPhone}>Avance : {formatMontant(member.avance ?? 0)} (couvrira les prochains tours)</Text>
+            ) : null}
+            {(member.enAttenteExcedent ?? 0) - (member.enAttenteExcedentTour ?? 0) > 0 ? (
+              <Text style={styles.memberPhone}>
+                À valider au-delà du dû (autres tours) : {formatMontant((member.enAttenteExcedent ?? 0) - (member.enAttenteExcedentTour ?? 0))}
+              </Text>
+            ) : null}
           </View>
           {member.statutPaiement ? (
-            <MembreStatusBadge statut={member.statutPaiement} reste={member.resteTour} aValider={member.enAttenteTour} />
+            <MembreStatusBadge statut={member.statutPaiement} reste={member.resteTour} aValider={member.enAttenteTour}
+              reporte={member.reporteTour} excedent={member.enAttenteExcedentTour} />
           ) : null}
         </View>
       );

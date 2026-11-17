@@ -17,6 +17,10 @@ interface MembreStatusBadgeProps {
   reste?: number;
   /** Amount declared and waiting for validation (FCFA) */
   aValider?: number;
+  /** Validated money carried into the round from other rounds' surplus (FCFA) */
+  reporte?: number;
+  /** Pending money beyond what the round still owes (FCFA) */
+  excedent?: number;
 }
 
 const STATUS_CONFIG: Record<
@@ -48,6 +52,11 @@ const STATUS_CONFIG: Record<
     backgroundColor: '#B71C1C',     // dark red – contrast 7.8:1 on white
     textColor: '#FFFFFF',
   },
+  non_du: {
+    label: 'Non dû',
+    backgroundColor: '#5F6B63',     // neutral – contrast 5.6:1 on white
+    textColor: '#FFFFFF',
+  },
   adhesion_en_attente: {
     label: 'À valider',
     backgroundColor: '#1F4E79',     // dark blue – contrast 8.6:1 on white
@@ -59,9 +68,11 @@ export function MembreStatusBadge({
   statut,
   reste,
   aValider,
+  reporte,
+  excedent,
 }: MembreStatusBadgeProps): React.JSX.Element {
   const config = STATUS_CONFIG[statut];
-  const label = libelleStatutTour(statut, reste, aValider) ?? config.label;
+  const label = libelleStatutTour(statut, reste, aValider, { reporte, excedent }) ?? config.label;
 
   return (
     <View

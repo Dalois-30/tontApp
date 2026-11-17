@@ -61,7 +61,7 @@ export type TontineStatus =
   | 'Cancelled';
 
 /** Payment status for a member in a tour */
-export type StatutPaiement = 'paye' | 'paye_partiel' | 'en_attente' | 'a_payer' | 'en_retard' | 'adhesion_en_attente';
+export type StatutPaiement = 'paye' | 'paye_partiel' | 'en_attente' | 'a_payer' | 'en_retard' | 'non_du' | 'adhesion_en_attente';
 
 /** Tontine detail */
 export interface TontineDetail extends TontineSummary {
@@ -95,9 +95,19 @@ export interface TontineMember {
   resteTour?: number;
   /** Declared on the open round and waiting for the trésorier's validation, FCFA */
   enAttenteTour?: number;
+  /** Validated surplus beyond every round owed so far: it will cover the next rounds, FCFA */
+  avance?: number;
+  /** All the member's money waiting for validation (any round), FCFA */
+  enAttenteTotal?: number;
+  /** Part of the pending money beyond what the rounds still owe, FCFA */
+  enAttenteExcedent?: number;
+  /** Validated money carried into the open round from other rounds' surplus, FCFA */
+  reporteTour?: number;
+  /** Pending money on the open round beyond what it still owes, FCFA */
+  enAttenteExcedentTour?: number;
   /** Linked account, when the member has one */
   utilisateurId?: string | null;
-  /** Raw status in the current round (paye, paye_partiel, en_attente, a_payer, en_retard, beneficiaire, suspendu, adhesion_en_attente) */
+  /** Raw status in the current round (paye, paye_partiel, en_attente, a_payer, en_retard, non_du, beneficiaire, suspendu, adhesion_en_attente) */
   statutTour?: string;
 }
 
@@ -108,9 +118,9 @@ export interface TourInfo {
   dateOuverture: string;
   dateCloture: string | null;
   estOuvert: boolean;
-  /** Number of payments received for this tour */
+  /** Members whose validated money (after carry-over) covers the round — same as /tours/actuel */
   nombrePaiementsRecus: number;
-  /** Total payments expected for this tour */
+  /** Members owing this round (beneficiary and members not owing it excluded) */
   nombrePaiementsAttendus: number;
 }
 

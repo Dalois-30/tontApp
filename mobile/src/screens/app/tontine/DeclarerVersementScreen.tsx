@@ -105,9 +105,12 @@ export function DeclarerVersementScreen({ route, navigation }: Props): React.JSX
       {cible ? (
         <Carte style={{ marginTop: spacing.sm }}>
           <Ligne label="Cotisation" valeur={formatMontant(t.montantCotisation)} />
-          {libelleStatutTour(cible.statutTour, cible.resteTour, cible.enAttenteTour) ? (
-            <Ligne label="Tour en cours" valeur={libelleStatutTour(cible.statutTour, cible.resteTour, cible.enAttenteTour) ?? ''}
-              ton={(cible.resteTour ?? 0) > 0 ? 'mauvais' : 'attente'} />
+          {libelleStatutTour(cible.statutTour, cible.resteTour, cible.enAttenteTour, { reporte: cible.reporteTour, excedent: cible.enAttenteExcedentTour }) ? (
+            <Ligne label="Tour en cours" valeur={libelleStatutTour(cible.statutTour, cible.resteTour, cible.enAttenteTour, { reporte: cible.reporteTour, excedent: cible.enAttenteExcedentTour }) ?? ''}
+              ton={(cible.resteTour ?? 0) > 0 ? 'mauvais' : cible.statutTour === 'paye' ? undefined : 'attente'} />
+          ) : null}
+          {(cible.avance ?? 0) > 0 ? (
+            <Ligne label="Avance (prochains tours)" valeur={formatMontant(cible.avance ?? 0)} />
           ) : null}
           <Ligne label="Reste dû (tours passés)" valeur={formatMontant(cible.resteDu ?? 0)} ton={(cible.resteDu ?? 0) > 0 ? 'mauvais' : undefined} />
         </Carte>

@@ -111,7 +111,7 @@ public class Phase0SecurityTests
 
     private void SetupNoExistingVersements()
     {
-        _versementRepo.Setup(r => r.GetByTontineAndTourAsync(It.IsAny<TontineId>(), It.IsAny<TourId>(), It.IsAny<CancellationToken>()))
+        _versementRepo.Setup(r => r.GetByTontineAsync(It.IsAny<TontineId>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Versement>());
         _versementRepo.Setup(r => r.GetLastByTontineAsync(It.IsAny<TontineId>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Versement?)null);
@@ -191,6 +191,26 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour.Id.Value, tour.BeneficiaryId.Value, 5000m, "Espèces"), CancellationToken.None);
 
         result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("bénéficiaire du tour 1");
+        _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Manuel_AdherentTardifSansRattrapage_TourAnterieur_EstRefuse()
+    {
+        var tontine = BuildActiveTontine();
+        SetupNoExistingVersements();
+        tontine.CloseRound(tontine.Rounds.First().Id); // round 2 open
+        tontine.ModifierReglesAdhesion(ModeAdhesionEnCours.AvecValidation, rattrapage: false);
+        var (_, code) = tontine.GenerateInvitation();
+        var eve = tontine.JoinWithInvitation("Eve", code, UtilisateurId.Create());
+        tontine.AccepterAdhesion(eve.Id);
+
+        var result = await Declarer(tontine, eve, 1, 5000m);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("ne doit pas de cotisation sur le tour 1");
+        (await Declarer(tontine, eve, 2, 5000m)).IsSuccess.Should().BeTrue();
     }
 
     [Fact]
@@ -228,7 +248,7 @@ public class Phase0SecurityTests
         var membre = tontine.Members.First(m => m.Id != tour.BeneficiaryId);
         var pending = Versement.Create(tontine.Id, TourId.From(tour.Id.Value), PayeurId.From(membre.Id.Value),
             Montant.Create(5000m));
-        _versementRepo.Setup(r => r.GetByTontineAndTourAsync(tontine.Id, It.IsAny<TourId>(), It.IsAny<CancellationToken>()))
+        _versementRepo.Setup(r => r.GetByTontineAsync(tontine.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Versement> { pending });
 
         var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
@@ -249,7 +269,7 @@ public class Phase0SecurityTests
             if (e.Confirme) v.Confirmer("CASH");
             return v;
         }).ToList();
-        _versementRepo.Setup(r => r.GetByTontineAndTourAsync(tontine.Id, It.IsAny<TourId>(), It.IsAny<CancellationToken>()))
+        _versementRepo.Setup(r => r.GetByTontineAsync(tontine.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(liste);
         return (tontine, tour, membre);
     }
@@ -299,6 +319,76 @@ public class Phase0SecurityTests
 
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Contain("entièrement payée");
+    }
+
+    // ── Surplus carried over: the declaration check uses the same rule ──
+
+    /// <summary>A member who owes rounds 1 and 2 (round 2 open), with the given versements (round number, amount, validated).</summary>
+    private (Tontine, Member) DeuxTours(params (int Tour, decimal Montant, bool Confirme)[] existants)
+    {
+        var tontine = BuildActiveTontine();
+        SetupNoExistingVersements();
+        tontine.CloseRound(tontine.Rounds.First().Id);
+        var beneficiaires = tontine.Rounds.Select(r => r.BeneficiaryId).ToHashSet();
+        var membre = tontine.Members.First(m => !beneficiaires.Contains(m.Id));
+        var liste = existants.Select(e =>
+        {
+            var tour = tontine.Rounds.Single(r => r.RoundNumber == e.Tour);
+            var v = Versement.Create(tontine.Id, TourId.From(tour.Id.Value), PayeurId.From(membre.Id.Value), Montant.Create(e.Montant));
+            if (e.Confirme) v.Confirmer("CASH");
+            return v;
+        }).ToList();
+        _versementRepo.Setup(r => r.GetByTontineAsync(tontine.Id, It.IsAny<CancellationToken>())).ReturnsAsync(liste);
+        return (tontine, membre);
+    }
+
+    private Task<Application.Common.Result<Guid>> Declarer(Tontine tontine, Member membre, int tour, decimal montant) =>
+        ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
+            tontine.Id.Value, tontine.Rounds.Single(r => r.RoundNumber == tour).Id.Value, membre.Id.Value, montant, "Espèces"),
+            CancellationToken.None);
+
+    [Fact]
+    public async Task Manuel_DeclarationAuDelaDuReste_EstAcceptee()
+    {
+        var (tontine, tour, membre) = AvecVersementsExistants((2000m, true));
+
+        var result = await ManuelHandler().Handle(new EnregistrerVersementManuelCommand(
+            tontine.Id.Value, tour.Id.Value, membre.Id.Value, 10000m, "Espèces"), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
+    }
+
+    [Fact]
+    public async Task Manuel_TourOuvertCouvertParAvance_EstRefuse()
+    {
+        var (tontine, membre) = DeuxTours((1, 10000m, true));
+
+        var result = await Declarer(tontine, membre, 2, 1000m);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("surplus").And.Contain("reportés");
+        _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Manuel_ArriereCouvertParSurplus_EstRefuse()
+    {
+        var (tontine, membre) = DeuxTours((2, 10000m, true));
+
+        var result = await Declarer(tontine, membre, 1, 1000m);
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("surplus");
+    }
+
+    [Fact]
+    public async Task Manuel_SurplusEnAttente_NeCouvrePas_LeTourResteDeclarable()
+    {
+        var (tontine, membre) = DeuxTours((2, 10000m, false));
+
+        var result = await Declarer(tontine, membre, 1, 5000m);
+
+        result.IsSuccess.Should().BeTrue(result.Error);
     }
 
     // ── Domain: actor in audit trail ────────────────────────────────

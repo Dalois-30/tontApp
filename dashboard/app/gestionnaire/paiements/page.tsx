@@ -186,7 +186,7 @@ export default function PaiementsPage() {
                 <option value="">Choisir un membre</option>
                 {membresAEncaisser.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.nom}{m.statut === "en_retard" ? " · en retard" : ""}{libelleStatutMembre(m) ? ` · ${libelleStatutMembre(m)}` : ""}{(m.resteDu ?? 0) > 0 ? ` · reste dû ${formatMontant(m.resteDu ?? 0)}` : ""}
+                    {m.nom}{m.statut === "en_retard" ? " · en retard" : ""}{libelleStatutMembre(m) ? ` · ${libelleStatutMembre(m)}` : ""}{(m.resteDu ?? 0) > 0 ? ` · reste dû ${formatMontant(m.resteDu ?? 0)}` : ""}{(m.avance ?? 0) > 0 ? ` · avance ${formatMontant(m.avance ?? 0)}` : ""}
                   </option>
                 ))}
               </select>

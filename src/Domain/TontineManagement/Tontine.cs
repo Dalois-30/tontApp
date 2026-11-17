@@ -361,6 +361,14 @@ public class Tontine : AggregateRoot<TontineId>
             .OrderBy(r => r.RoundNumber).ToList().AsReadOnly();
     }
 
+    /// <summary>
+    /// Situation of a member on the rounds they owe, with the surplus carried over
+    /// (<see cref="SituationCotisations.Calculer"/>). <paramref name="versements"/> are the member's
+    /// non-rejected payments; every screen and decision uses this single rule.
+    /// </summary>
+    public SituationCotisations SituationDe(MemberId membreId, IEnumerable<VersementCotisation> versements)
+        => SituationCotisations.Calculer(ToursDusPar(membreId), ContributionAmount.Amount, versements);
+
     /// <summary>Changes the late-joining rules. Members already accepted keep their terms.</summary>
     public void ModifierReglesAdhesion(ModeAdhesionEnCours mode, bool rattrapage)
     {

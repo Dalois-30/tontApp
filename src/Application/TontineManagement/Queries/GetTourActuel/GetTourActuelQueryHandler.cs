@@ -1,8 +1,8 @@
 namespace Application.TontineManagement.Queries.GetTourActuel;
 
 using Application.Common;
+using Application.TontineManagement.Services;
 using Domain.PaymentManagement.Repositories;
-using Domain.PaymentManagement.ValueObjects;
 using Domain.TontineManagement.Repositories;
 using Domain.TontineManagement.ValueObjects;
 
@@ -33,28 +33,31 @@ public sealed class GetTourActuelQueryHandler : IQueryHandler<GetTourActuelQuery
 
         var beneficiary = tontine.Members.FirstOrDefault(m => m.Id == currentRound.BeneficiaryId);
 
-        var versements = await _versementRepository.GetByTontineAndTourAsync(
-            tontine.Id, TourId.From(currentRound.Id.Value), cancellationToken);
+        // Single contribution rule (surplus carried over): a partial payment is not counted as paid.
+        var situations = tontine.Situations(await _versementRepository.GetByTontineAsync(tontine.Id, cancellationToken));
 
         var activeMembers = tontine.Members
             .Where(m => m.Statut == StatutMembre.Actif)
             .ToList();
 
-        var montantAttendu = tontine.ContributionAmount.Amount * activeMembers.Count;
-        var montantCollecte = versements
-            .Where(v => v.Statut == VersementStatus.Confirme)
-            .Sum(v => v.Montant.Valeur);
+        // Owed by the active members who owe this round (not the beneficiary, nor a late member without catch-up).
+        var dus = activeMembers
+            .Select(m => (Membre: m, Tour: situations[m.Id.Value].Tour(currentRound.Id.Value)))
+            .ToList();
+        var totaux = tontine.TotauxDe(currentRound, situations);
+        var (montantAttendu, montantCollecte, nombreAttendus, nombrePayes) =
+            (totaux.Attendu, totaux.Collecte, totaux.NombreAttendus, totaux.NombrePayes);
 
-        var paidMemberIds = versements
-            .Where(v => v.Statut == VersementStatus.Confirme)
-            .Select(v => v.PayeurId.Value)
-            .ToHashSet();
-
-        var payeurs = activeMembers.Select(m => new PayeurDto(
-            m.Id.Value,
-            m.Name,
-            paidMemberIds.Contains(m.Id.Value) ? "Payé" : "En attente"
-        )).ToList();
+        var payeurs = dus.Select(x => new PayeurDto(
+            x.Membre.Id.Value,
+            x.Membre.Name,
+            x.Tour switch
+            {
+                null => x.Membre.Id == currentRound.BeneficiaryId ? "Bénéficiaire" : "Non dû",
+                { Paye: true } => "Payé",
+                { Valide: > 0 } => "Payé partiellement",
+                _ => "En attente"
+            })).ToList();
 
         var pourcentage = montantAttendu > 0
             ? (double)(montantCollecte / montantAttendu) * 100
@@ -69,8 +72,8 @@ public sealed class GetTourActuelQueryHandler : IQueryHandler<GetTourActuelQuery
             currentRound.DateLimite,
             montantCollecte,
             montantAttendu,
-            paidMemberIds.Count,
-            activeMembers.Count,
+            nombrePayes,
+            nombreAttendus,
             Math.Round(pourcentage, 1),
             payeurs);
     }

@@ -61,18 +61,26 @@ const STATUTS: Record<string, string> = {
  * Label of a member's open round when part of it is paid or pending; undefined otherwise (default label).
  * A partly paid round is never shown as a plain "Payé":
  * "Payé partiellement · reste 6 000 FCFA" (and/or "· 6 000 FCFA à valider");
- * a pending payment smaller than the contribution: "4 000 FCFA à valider · reste 6 000 FCFA".
+ * a pending payment smaller than the contribution: "4 000 FCFA à valider · reste 6 000 FCFA";
+ * a round covered by carry-over: "Payé · dont 3 000 FCFA reportés"; pending beyond what the round owes:
+ * "8 000 FCFA à valider (dont 3 000 FCFA en excédent)".
  */
-export function libelleStatutTour(statut: string | undefined, reste?: number, aValider?: number): string | undefined {
+export function libelleStatutTour(
+  statut: string | undefined, reste?: number, aValider?: number,
+  extra?: { reporte?: number; excedent?: number },
+): string | undefined {
   const r = reste ?? 0;
   const v = aValider ?? 0;
-  if (statut === 'paye_partiel') {
-    const parts = ['Payé partiellement'];
-    if (r > 0) parts.push(`reste ${formatMontant(r)}`);
-    if (v > 0) parts.push(`${formatMontant(v)} à valider`);
-    return parts.join(' · ');
+  const rep = extra?.reporte ?? 0;
+  const exc = extra?.excedent ?? 0;
+  const attente = v > 0 ? `${formatMontant(v)} à valider${exc > 0 ? ` (dont ${formatMontant(exc)} en excédent)` : ''}` : '';
+  const reportes = rep > 0 ? `dont ${formatMontant(rep)} reportés` : '';
+  if (statut === 'paye') {
+    const parts = ['Payé', reportes, attente].filter(Boolean);
+    return parts.length > 1 ? parts.join(' · ') : undefined;
   }
-  if (statut === 'en_attente' && r > 0) return `${v > 0 ? `${formatMontant(v)} à valider` : 'À valider'} · reste ${formatMontant(r)}`;
+  if (statut === 'paye_partiel') return ['Payé partiellement', r > 0 ? `reste ${formatMontant(r)}` : '', reportes, attente].filter(Boolean).join(' · ');
+  if (statut === 'en_attente' && (r > 0 || exc > 0)) return [attente || 'À valider', r > 0 ? `reste ${formatMontant(r)}` : ''].filter(Boolean).join(' · ');
   return undefined;
 }
 

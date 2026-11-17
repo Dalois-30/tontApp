@@ -70,7 +70,7 @@ interface BackendTontineDetailsDto {
     id: string;
     nom: string;
     telephone: string | null;
-    statut: string; // paye | paye_partiel | en_attente | a_payer | en_retard | beneficiaire | suspendu
+    statut: string; // paye | paye_partiel | en_attente | a_payer | en_retard | non_du | beneficiaire | suspendu
     utilisateurId: string | null;
     rang: number;
     resteDu: number;
@@ -78,6 +78,11 @@ interface BackendTontineDetailsDto {
     resteTour?: number;
     enAttenteTour?: number;
     restesImpayes?: number[] | null;
+    avance?: number;
+    enAttenteTotal?: number;
+    enAttenteExcedent?: number;
+    reporteTour?: number;
+    enAttenteExcedentTour?: number;
   }[];
   tours: {
     id: string;
@@ -87,6 +92,9 @@ interface BackendTontineDetailsDto {
     dateOuverture: string;
     dateCloture: string | null;
     dateLimite: string;
+    /** Totals from the shared rule (same as /tours/actuel): members owing the round / covered. */
+    nombreAttendus?: number;
+    nombrePayes?: number;
   }[];
   createdAt: string;
   gestionnaireId: string;
@@ -100,13 +108,15 @@ function mapStatutPaiement(statut: string): StatutPaiement | undefined {
   if (statut === 'en_attente') return 'en_attente';
   if (statut === 'a_payer') return 'a_payer';
   if (statut === 'adhesion_en_attente') return 'adhesion_en_attente';
+  if (statut === 'non_du') return 'non_du';
   return undefined; // beneficiaire, suspendu
 }
 
 function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
   const tour = dto.tours.find((t) => t.status === 'Ouvert');
+  // Older API without round totals: count the members owing the round.
   const payeurs = dto.membres.filter(
-    (m) => m.statut !== 'beneficiaire' && m.statut !== 'suspendu' && m.statut !== 'adhesion_en_attente',
+    (m) => m.statut !== 'beneficiaire' && m.statut !== 'suspendu' && m.statut !== 'adhesion_en_attente' && m.statut !== 'non_du',
   );
   return {
     id: dto.id,
@@ -131,6 +141,11 @@ function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
       restesImpayes: m.restesImpayes ?? undefined,
       resteTour: m.resteTour,
       enAttenteTour: m.enAttenteTour,
+      avance: m.avance,
+      enAttenteTotal: m.enAttenteTotal,
+      enAttenteExcedent: m.enAttenteExcedent,
+      reporteTour: m.reporteTour,
+      enAttenteExcedentTour: m.enAttenteExcedentTour,
       utilisateurId: m.utilisateurId,
       statutTour: m.statut,
     })),
@@ -148,8 +163,8 @@ function mapToTontineDetail(dto: BackendTontineDetailsDto): TontineDetail {
           dateOuverture: tour.dateOuverture,
           dateCloture: tour.dateLimite,
           estOuvert: true,
-          nombrePaiementsRecus: payeurs.filter((m) => m.statut === 'paye').length,
-          nombrePaiementsAttendus: payeurs.length,
+          nombrePaiementsRecus: tour.nombrePayes ?? payeurs.filter((m) => m.statut === 'paye').length,
+          nombrePaiementsAttendus: tour.nombreAttendus ?? payeurs.length,
         }
       : null,
   };

@@ -382,6 +382,183 @@ public sealed class TontineCircuitTests(ApiFactory api)
         ((decimal)bruno["enAttenteTour"]!).Should().Be(0m);
     }
 
+    // ── Surplus carried over: one rule, same situation on every screen ──
+
+    private static async Task<Guid> CloturerTour1(Groupe t)
+    {
+        (await t.Gestionnaire.Post($"/api/v1/tontines/{t.Id}/rounds/{t.TourId}/close")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var d = await t.Gestionnaire.Lire($"/api/v1/tontines/{t.Id}/details");
+        return (Guid)d["tours"]!.AsArray().First(x => (string)x!["status"]! == "Ouvert")!["id"]!;
+    }
+
+    private static async Task<string> StatutTourActuel(Acteur lecteur, Groupe t, string nom) =>
+        (string)(await lecteur.Lire($"/api/v1/tontines/{t.Id}/tours/actuel"))["payeurs"]!.AsArray()
+            .First(p => (string)p!["nom"]! == nom)!["statut"]!;
+
+    private static async Task<IEnumerable<Guid>> Retardataires(Groupe t, Guid tourId) =>
+        (await t.Gestionnaire.Lire($"/api/v1/tontines/{t.Id}/tours/{tourId}/retardataires")).AsArray()
+            .Select(r => (Guid)r!["membreId"]!);
+
+    [Fact]
+    public async Task SurplusVersArriere_EnRetardDUnTour_PaieDouble_AJourPartout()
+    {
+        var t = await TontineAsync();
+        var tour2 = await CloturerTour1(t); // Chloé paid nothing on round 1; round 2 is Bruno's
+        var v = await DeclarerMontantOk(t.Chloe, t, 2 * Cotisation, tour2);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/valider");
+
+        var chloe = await Membre(t.Alice, t, t.MembreChloe);
+        ((string)chloe["statut"]!).Should().Be("paye");
+        ((decimal)chloe["resteDu"]!).Should().Be(0m);
+        ((decimal)chloe["resteTour"]!).Should().Be(0m);
+        chloe["toursImpayes"]!.AsArray().Should().BeEmpty();
+
+        var web = (await t.Gestionnaire.Lire($"/api/v1/dashboard/gestionnaire/tontine?tontineId={t.Id}"))["membres"]!.AsArray()
+            .First(m => (Guid)m!["id"]! == t.MembreChloe)!;
+        ((string)web["statut"]!).Should().Be("paye");
+        ((decimal)web["resteDu"]!).Should().Be(0m);
+
+        (await StatutTourActuel(t.Alice, t, "Chloé Fotso")).Should().Be("Payé");
+        (await Retardataires(t, t.TourId)).Should().NotContain(t.MembreChloe);
+        (await Retardataires(t, tour2)).Should().NotContain(t.MembreChloe);
+    }
+
+    [Fact]
+    public async Task SurplusEnAvance_PayeAvecAvance_PuisTourSuivantCouvert_EtDeclarationRefusee()
+    {
+        var t = await TontineAsync();
+        var v = await DeclarerMontantOk(t.Chloe, t, 2 * Cotisation);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/valider");
+
+        var chloe = await Membre(t.Bruno, t, t.MembreChloe);
+        ((string)chloe["statut"]!).Should().Be("paye");
+        ((decimal)chloe["avance"]!).Should().Be(Cotisation);
+
+        var tour2 = await CloturerTour1(t);
+        chloe = await Membre(t.Bruno, t, t.MembreChloe);
+        ((string)chloe["statut"]!).Should().Be("paye");
+        ((decimal)chloe["avance"]!).Should().Be(0m);
+        ((decimal)chloe["resteTour"]!).Should().Be(0m);
+        (await StatutTourActuel(t.Bruno, t, "Chloé Fotso")).Should().Be("Payé");
+
+        var r = await DeclarerMontant(t.Chloe, t, 1000m, tour2);
+        r.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await r.Content.ReadAsStringAsync()).Should().Contain("surplus").And.Contain("Chloé Fotso");
+    }
+
+    [Fact]
+    public async Task DeclarationAuDelaDuReste_Acceptee()
+    {
+        var t = await TontineAsync();
+        var v = await DeclarerMontantOk(t.Bruno, t, 2000m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/valider");
+
+        (await DeclarerMontant(t.Bruno, t, 10000m)).StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task TourActuel_PartielNonCompteCommePaye()
+    {
+        var t = await TontineAsync();
+        var v = await DeclarerMontantOk(t.Bruno, t, 2000m);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/valider");
+
+        var actuel = await t.Chloe.Lire($"/api/v1/tontines/{t.Id}/tours/actuel");
+        ((int)actuel["nombrePayes"]!).Should().Be(0);
+        ((decimal)actuel["montantCollecte"]!).Should().Be(2000m);
+        (await StatutTourActuel(t.Chloe, t, "Bruno Mbarga")).Should().Be("Payé partiellement");
+    }
+
+    [Fact]
+    public async Task SurplusRejete_AucunReport()
+    {
+        var t = await TontineAsync();
+        var tour2 = await CloturerTour1(t);
+        var v = await DeclarerMontantOk(t.Chloe, t, 2 * Cotisation, tour2);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/rejeter", new { raison = "Argent non reçu" });
+
+        var chloe = await Membre(t.Alice, t, t.MembreChloe);
+        ((decimal)chloe["resteDu"]!).Should().Be(Cotisation);
+        ((decimal)chloe["resteTour"]!).Should().Be(Cotisation);
+        ((decimal)chloe["avance"]!).Should().Be(0m);
+        (await Retardataires(t, t.TourId)).Should().Contain(t.MembreChloe);
+    }
+
+    /// <summary>A late member, accepted by the responsable; returns their account and member id.</summary>
+    private async Task<(Acteur Compte, Guid Membre)> AdherentTardif(Groupe t, string nom)
+    {
+        var dan = await api.CompteAsync(nom);
+        var code = (string)(await t.Gestionnaire.Lire($"/api/v1/tontines/{t.Id}/invitation/generer?nombreUsagesMax=5"))["code"]!;
+        await dan.Envoyer("/api/v1/tontines/rejoindre", new { code, memberName = dan.Nom });
+        var id = (Guid)(await t.Gestionnaire.Lire($"/api/v1/tontines/{t.Id}/details"))["membres"]!.AsArray()
+            .First(m => (Guid?)m!["utilisateurId"] == dan.Id)!["id"]!;
+        (await t.Gestionnaire.Post($"/api/v1/tontines/{t.Id}/membres/{id}/accepter")).StatusCode.Should().Be(HttpStatusCode.OK);
+        return (dan, id);
+    }
+
+    [Fact]
+    public async Task TourActuel_Contrat_StatutsEtTotaux_AvecReport()
+    {
+        var t = await TontineAsync();
+        var v = await DeclarerMontantOk(t.Chloe, t, 2 * Cotisation); // 5 000 carried to round 2
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{v}/valider");
+        var tour2 = await CloturerTour1(t); // round 2: Bruno is the beneficiary
+        var (dan, _) = await AdherentTardif(t, "Dan Tchoua"); // owes rounds 1 and 2, pays nothing
+        var a = await DeclarerMontantOk(t.Alice, t, 2000m, tour2);
+        await t.Gestionnaire.Envoyer($"/api/v1/versements/{a}/valider");
+
+        var actuel = await t.Alice.Lire($"/api/v1/tontines/{t.Id}/tours/actuel");
+        var statuts = actuel["payeurs"]!.AsArray().ToDictionary(p => (string)p!["nom"]!, p => (string)p!["statut"]!);
+        statuts["Chloé Fotso"].Should().Be("Payé");
+        statuts["Alice Ngono"].Should().Be("Payé partiellement");
+        statuts[dan.Nom].Should().Be("En attente");
+        statuts["Bruno Mbarga"].Should().Be("Bénéficiaire");
+        ((int)actuel["nombreAttendus"]!).Should().Be(3);
+        ((int)actuel["nombrePayes"]!).Should().Be(1);
+        ((decimal)actuel["montantAttendu"]!).Should().Be(3 * Cotisation);
+        ((decimal)actuel["montantCollecte"]!).Should().Be(Cotisation + 2000m);
+
+        // Same totals in the tontine details (web and mobile).
+        var tour = (await t.Alice.Lire($"/api/v1/tontines/{t.Id}/details"))["tours"]!.AsArray()
+            .First(x => (Guid)x!["id"]! == tour2)!;
+        ((decimal)tour["montantCollecte"]!).Should().Be(Cotisation + 2000m);
+        ((decimal)tour["montantAttendu"]!).Should().Be(3 * Cotisation);
+        ((int)tour["nombreAttendus"]!).Should().Be(3);
+        ((int)tour["nombrePayes"]!).Should().Be(1);
+        var chloe = await Membre(t.Alice, t, t.MembreChloe);
+        ((decimal)chloe["reporteTour"]!).Should().Be(Cotisation);
+    }
+
+    [Fact]
+    public async Task AdherentTardifSansRattrapage_TourAnterieurRefuse_RetardSurLeTourOuvertSeulement()
+    {
+        var t = await TontineAsync();
+        var tour2 = await CloturerTour1(t);
+        (await t.Gestionnaire.Put($"/api/v1/tontines/{t.Id}/regles", new { adhesionEnCours = "AvecValidation", rattrapageAdhesionTardive = false }))
+            .IsSuccessStatusCode.Should().BeTrue();
+        var (dan, membreDan) = await AdherentTardif(t, "Dan Tchoua");
+
+        var r = await DeclarerMontant(dan, t, Cotisation, t.TourId);
+        r.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await r.Content.ReadAsStringAsync()).Should().Contain("ne doit pas de cotisation sur le tour 1");
+
+        (await Retardataires(t, t.TourId)).Should().NotContain(membreDan);
+        (await Retardataires(t, tour2)).Should().Contain(membreDan);
+        var d = await Membre(t.Alice, t, membreDan);
+        ((decimal)d["resteDu"]!).Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task DeclarationSurSonPropreTour_Beneficiaire_RefuseeAvecUnMessageClair()
+    {
+        var t = await TontineAsync();
+
+        var r = await DeclarerMontant(t.Alice, t, Cotisation);
+
+        r.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await r.Content.ReadAsStringAsync()).Should().Contain("bénéficiaire du tour 1");
+    }
+
     // ── Web dashboard: the creator (responsable + trésorier) keeps the existing flow ──
 
     [Fact]

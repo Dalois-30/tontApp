@@ -35,6 +35,16 @@ export interface MembreDto {
   resteTour?: number;
   /** Declared on the open round and waiting for validation, FCFA */
   enAttenteTour?: number;
+  /** Validated surplus beyond every round owed so far: it will cover the next rounds, FCFA */
+  avance?: number;
+  /** All the member's money waiting for validation (any round), FCFA */
+  enAttenteTotal?: number;
+  /** Part of the pending money beyond what the rounds still owe, FCFA */
+  enAttenteExcedent?: number;
+  /** Validated money carried into the open round from other rounds' surplus, FCFA */
+  reporteTour?: number;
+  /** Pending money on the open round beyond what it still owes, FCFA */
+  enAttenteExcedentTour?: number;
 }
 
 export interface TourDto {
@@ -45,6 +55,11 @@ export interface TourDto {
   dateOuverture: string;
   dateCloture?: string;
   dateLimite?: string;
+  /** Totals from the shared rule, over the members owing the round (same as /tours/actuel) */
+  montantCollecte?: number;
+  montantAttendu?: number;
+  nombreAttendus?: number;
+  nombrePayes?: number;
 }
 
 export interface VersementDto {

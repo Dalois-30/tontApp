@@ -26,7 +26,7 @@ async function charger(token: string) {
   return { tontine, versements: page.items ?? [], echec: null };
 }
 
-const ordreStatut: Record<string, number> = { en_retard: 0, a_payer: 1, paye_partiel: 2, en_attente: 3, paye: 4, beneficiaire: 5, suspendu: 6 };
+const ordreStatut: Record<string, number> = { en_retard: 0, a_payer: 1, paye_partiel: 2, en_attente: 3, paye: 4, beneficiaire: 5, non_du: 6, suspendu: 7 };
 
 export default async function TableauDeBordTontine() {
   const token = (await cookies()).get("accessToken")?.value ?? "";
@@ -68,21 +68,20 @@ export default async function TableauDeBordTontine() {
   const membres = tontine.membres.filter((m) => m.statut !== "adhesion_en_attente");
   const demandes = tontine.membres.filter((m) => m.statut === "adhesion_en_attente");
   const tour = tontine.tours.find((t) => t.status === "Ouvert");
-  const payeurs = membres.filter((m) => m.statut !== "beneficiaire" && m.statut !== "suspendu");
+  // Members owing the open round (the beneficiary and members who do not owe it are not expected).
+  const payeurs = membres.filter((m) => m.statut !== "beneficiaire" && m.statut !== "suspendu" && m.statut !== "non_du");
   const compte = (s: string) => payeurs.filter((m) => m.statut === s).length;
   const resteDuTotal = membres.reduce((a, m) => a + (m.resteDu ?? 0), 0);
 
-  const confirmes = versements.filter((v) => v.status === "confirme");
-  const collecteTour = tour ? confirmes.filter((v) => v.tourId === tour.id).reduce((a, v) => a + v.montant, 0) : 0;
-  const attenduTour = payeurs.length * tontine.montantCotisation;
-
-  // Expected per round = members who owed it (all except that round's beneficiary), approximated
-  // with today's members; collected = validated payments recorded on that round.
+  // Round totals come from the server's shared rule (validated after carry-over, members owing the round),
+  // the same figures as GET /tours/actuel.
+  const collecteTour = tour?.montantCollecte ?? 0;
+  const attenduTour = tour?.montantAttendu ?? 0;
   const rounds: RoundPoint[] = tontine.tours.map((t) => ({
     numero: t.numero,
     enCours: t.status === "Ouvert",
-    collecte: confirmes.filter((v) => v.tourId === t.id).reduce((a, v) => a + v.montant, 0),
-    attendu: Math.max(0, membres.filter((m) => m.statut !== "suspendu").length - 1) * tontine.montantCotisation,
+    collecte: t.montantCollecte ?? 0,
+    attendu: t.montantAttendu ?? 0,
   }));
 
   const gere = peutGerer(tontine);
@@ -113,7 +112,7 @@ export default async function TableauDeBordTontine() {
         <Stat label="Collecté sur ce tour" value={formatMontant(collecteTour)}
           meter={attenduTour > 0 ? (collecteTour / attenduTour) * 100 : 0}
           context={`sur ${formatMontant(attenduTour)} attendus`} />
-        <Stat label="Membres à jour" value={`${compte("paye")} / ${payeurs.length}`}
+        <Stat label="Membres à jour" value={`${tour?.nombrePayes ?? compte("paye")} / ${tour?.nombreAttendus ?? payeurs.length}`}
           context={compte("en_attente") > 0 ? `${compte("en_attente")} paiement(s) à valider` : "Aucun paiement à valider"}
           tone={compte("en_attente") > 0 ? "warn" : undefined} />
         <Stat label="Reste dû (tours passés)" value={formatMontant(resteDuTotal)}
@@ -156,6 +155,12 @@ export default async function TableauDeBordTontine() {
                       ? <span className="text-bad font-medium" title={`Tours ${m.toursImpayes?.join(", ")}`}>{formatMontant(m.resteDu ?? 0)}</span>
                       : <span className="text-muted">—</span>}
                     {(m.resteDu ?? 0) > 0 && <p className="text-[12px] text-muted">tours {m.toursImpayes?.join(", ")}</p>}
+                    {(m.avance ?? 0) > 0 && <p className="text-[12px] text-muted">avance {formatMontant(m.avance ?? 0)}</p>}
+                    {(m.enAttenteExcedent ?? 0) - (m.enAttenteExcedentTour ?? 0) > 0 && (
+                      <p className="text-[12px] text-muted">
+                        {formatMontant((m.enAttenteExcedent ?? 0) - (m.enAttenteExcedentTour ?? 0))} à valider au-delà du dû (autres tours)
+                      </p>
+                    )}
                   </td>
                   <td className="text-right">
                     {gere && doitSurLeTour(m, tontine.montantCotisation) && m.telephone

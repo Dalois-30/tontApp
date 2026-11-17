@@ -393,7 +393,10 @@ public class TontineController : ControllerBase
 
     // ── GET /api/v1/tontines/{id}/tours/actuel ─────────────────────
     /// <summary>
-    /// Get the current (open) round details with payment progress.
+    /// Get the current (open) round details with payment progress, after the surplus carry-over.
+    /// Payer statuses: "Payé", "Payé partiellement", "En attente", "Bénéficiaire", "Non dû".
+    /// NombreAttendus / MontantAttendu count only the active members who owe the round; MontantCollecte is the
+    /// validated money after carry-over (see <see cref="TourActuelDto"/>).
     /// </summary>
     [HttpGet("{id:guid}/tours/actuel")]
     [ProducesResponseType(typeof(TourActuelDto), StatusCodes.Status200OK)]
@@ -493,7 +496,7 @@ public class TontineController : ControllerBase
         => Ok(await _dashboard.GetVersementsAsync(id, page, pageSize, cancellationToken));
 
     // ── GET /api/v1/tontines/{id}/tours/{tourId}/retardataires ─────
-    /// <summary>Active members (beneficiary excluded) with no pending or confirmed payment for the round.</summary>
+    /// <summary>Active members who owe the round and have not covered it (validated after surplus carry-over + pending).</summary>
     [HttpGet("{id:guid}/tours/{tourId:guid}/retardataires")]
     [TontineAccess(NiveauAcces.Gestionnaire)]
     public async Task<IActionResult> GetRetardataires(Guid id, Guid tourId, CancellationToken cancellationToken)
@@ -527,7 +530,7 @@ public class TontineController : ControllerBase
     public async Task<IActionResult> RelancerMembre(Guid id, Guid membreId, CancellationToken cancellationToken)
     {
         var count = await _dashboard.RelancerAsync(id, [membreId], cancellationToken);
-        return count == 0 ? NotFound(new { error = "Member not found or reminder not sent." }) : Ok(new { relances = count });
+        return count == 0 ? NotFound(new { error = "Aucun rappel envoyé : membre introuvable, ou rien n'est dû sur le tour en cours." }) : Ok(new { relances = count });
     }
 
     [TontineAccess(NiveauAcces.Gestionnaire)]
