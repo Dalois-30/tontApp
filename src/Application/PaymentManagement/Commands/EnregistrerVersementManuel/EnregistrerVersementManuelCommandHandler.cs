@@ -24,17 +24,20 @@ public sealed class EnregistrerVersementManuelCommandHandler
     private readonly ITontineRepository _tontineRepository;
     private readonly IAuditTrailService _auditTrailService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IVerrouTontine _verrou;
 
     public EnregistrerVersementManuelCommandHandler(
         IVersementRepository versementRepository,
         ITontineRepository tontineRepository,
         IAuditTrailService auditTrailService,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IVerrouTontine verrou)
     {
         _versementRepository = versementRepository;
         _tontineRepository = tontineRepository;
         _auditTrailService = auditTrailService;
         _unitOfWork = unitOfWork;
+        _verrou = verrou;
     }
 
     public async Task<Result<Guid>> Handle(
@@ -42,6 +45,11 @@ public sealed class EnregistrerVersementManuelCommandHandler
         CancellationToken cancellationToken)
     {
         var tontineId = TontineId.From(request.TontineId);
+
+        // One versement write at a time per tontine: the "round covered" check, the last hashes and the
+        // insert below run in one transaction holding the tontine's lock, so two simultaneous declarations
+        // can neither both pass the check nor fork the hash chains. Rolled back on any refusal.
+        await using var verrou = await _verrou.VerrouillerAsync(tontineId, cancellationToken);
 
         // The member and the round must belong to this tontine.
         var tontine = await _tontineRepository.GetByIdReadOnlyAsync(tontineId, cancellationToken);
@@ -116,6 +124,7 @@ public sealed class EnregistrerVersementManuelCommandHandler
         await _versementRepository.AddAsync(versement, cancellationToken);
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await verrou.ValiderAsync(cancellationToken);
 
         return Result<Guid>.Success(versement.Id.Value);
     }

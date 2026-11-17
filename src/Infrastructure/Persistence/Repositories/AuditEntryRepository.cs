@@ -44,9 +44,13 @@ internal sealed class AuditEntryRepository : IAuditEntryRepository
         TontineId tontineId,
         CancellationToken cancellationToken = default)
     {
+        // The tail of the chain: the entry no other entry of the tontine chains on (not the latest timestamp,
+        // which ties or clock skew could get wrong). Linear under the tontine lock; on a chain forked before
+        // the lock existed, the most recent tail.
         return await _dbContext.AuditEntries
             .AsNoTracking()
-            .Where(e => e.TontineId == tontineId)
+            .Where(e => e.TontineId == tontineId
+                && !_dbContext.AuditEntries.Any(s => s.TontineId == tontineId && s.HashPrecedent == e.HashCourant))
             .OrderByDescending(e => e.Timestamp)
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -62,6 +66,7 @@ internal sealed class AuditEntryRepository : IAuditEntryRepository
 
     public async Task AddAsync(AuditEntry entry, CancellationToken cancellationToken = default)
     {
+        _dbContext.ExigerVerrou(entry.TontineId);
         await _dbContext.AuditEntries.AddAsync(entry, cancellationToken);
     }
 }

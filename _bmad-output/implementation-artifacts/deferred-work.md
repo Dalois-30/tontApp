@@ -1,9 +1,6 @@
 # Travaux reportés
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-circuit-paiement-bureau.md`
-  summary: Sérialiser les déclarations concurrentes (index unique tontine/tour/payeur hors Echoue, verrou sur la chaîne de hash).
-  evidence: Lecture du dernier hash puis écriture sans verrou : deux requêtes simultanées peuvent dupliquer et fourcher la chaîne.
-- source_spec: `_bmad-output/implementation-artifacts/spec-circuit-paiement-bureau.md`
   summary: CI : exécuter tests/ApiTests (Docker requis) et ajouter l'Id du projet dans tontApp.slnx.
   evidence: Aucun pipeline ne lance ces tests ; slnx sans Id contrairement aux voisins.
 - source_spec: `_bmad-output/implementation-artifacts/spec-paiement-partiel-tontine.md`

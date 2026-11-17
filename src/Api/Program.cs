@@ -104,7 +104,8 @@ public class Program
             // ── Controllers & OpenAPI ──────────────────────────────────
             builder.Services.Configure<Api.Security.FeatureFlags>(
                 builder.Configuration.GetSection(Api.Security.FeatureFlags.SectionName));
-            builder.Services.AddControllers();
+            builder.Services.AddControllers(options =>
+                options.Filters.Add<Api.Middleware.TontineOccupeeExceptionFilter>());
             builder.Services.AddOpenApi();
 
             // ── Health checks ──────────────────────────────────────────

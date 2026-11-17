@@ -15,21 +15,27 @@ public sealed class InitierVersementCommandHandler : ICommandHandler<InitierVers
     private readonly IMobileMoneyGateway _mobileMoneyGateway;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAuditTrailService _auditTrailService;
+    private readonly IVerrouTontine _verrou;
 
     public InitierVersementCommandHandler(
         IVersementRepository versementRepository,
         IMobileMoneyGateway mobileMoneyGateway,
         IUnitOfWork unitOfWork,
-        IAuditTrailService auditTrailService)
+        IAuditTrailService auditTrailService,
+        IVerrouTontine verrou)
     {
         _versementRepository = versementRepository;
         _mobileMoneyGateway = mobileMoneyGateway;
         _unitOfWork = unitOfWork;
         _auditTrailService = auditTrailService;
+        _verrou = verrou;
     }
 
     public async Task<Guid> Handle(InitierVersementCommand request, CancellationToken cancellationToken)
     {
+        // One versement write at a time per tontine: last hashes read and insert under the tontine's lock.
+        await using var verrou = await _verrou.VerrouillerAsync(TontineId.From(request.TontineId), cancellationToken);
+
         // Build the hash chain: get the last versement for this tontine
         var lastVersement = await _versementRepository.GetLastByTontineAsync(
             TontineId.From(request.TontineId), cancellationToken);
@@ -47,6 +53,7 @@ public sealed class InitierVersementCommandHandler : ICommandHandler<InitierVers
 
         await _versementRepository.AddAsync(versement, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await verrou.ValiderAsync(cancellationToken);
 
         // Initiate mobile money payment (after persisting the versement)
         var mobileMoneyRequest = new MobileMoneyRequest(

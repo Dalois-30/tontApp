@@ -69,6 +69,14 @@ public static class DependencyInjection
         // Audit trail service
         services.AddScoped<IAuditTrailService, AuditTrailService>();
 
+        // Per-tontine serialisation of the versement / audit chain writers (pg_advisory_xact_lock)
+        // Bounded wait for a tontine's lock (VerrouTontine:DelaiAttenteMs, default 10 s), then 503 "réessayez".
+        var delaiVerrouMs = configuration.GetValue("VerrouTontine:DelaiAttenteMs", 10_000);
+        services.AddScoped<IVerrouTontine>(sp => new VerrouTontinePostgres(sp.GetRequiredService<TontineDbContext>())
+        {
+            DelaiAttente = TimeSpan.FromMilliseconds(delaiVerrouMs),
+        });
+
         // Notification service (always via Outbox, never direct SMS)
         services.AddScoped<INotificationService, NotificationService>();
 

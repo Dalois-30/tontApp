@@ -56,22 +56,47 @@ internal sealed class VersementRepository : IVersementRepository
             .ToListAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// The tail of the tontine's versement chain: the versement whose hash no other versement of the tontine
+    /// chains on (not the latest by date, which a clock skew could get wrong). Under the tontine lock the chain
+    /// is linear, so there is one; on a chain forked before the lock existed, the most recent tail.
+    /// </summary>
     public async Task<Versement?> GetLastByTontineAsync(
         TontineId tontineId, CancellationToken cancellationToken = default)
     {
         return await _dbContext.Versements
-            .Where(v => v.TontineId == tontineId)
+            .AsNoTracking()
+            .Where(v => v.TontineId == tontineId
+                && !_dbContext.Versements.Any(s => s.TontineId == tontineId && s.HashPrecedent == v.HashCourant))
             .OrderByDescending(v => v.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public async Task<TontineId?> GetTontineIdAsync(VersementId id, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Versements
+            .AsNoTracking()
+            .Where(v => v.Id == id)
+            .Select(v => v.TontineId)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<Versement?> GetByIdSansSuiviAsync(VersementId id, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Versements
+            .AsNoTracking()
+            .FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
+    }
+
     public async Task AddAsync(Versement versement, CancellationToken cancellationToken = default)
     {
+        _dbContext.ExigerVerrou(versement.TontineId);
         await _dbContext.Versements.AddAsync(versement, cancellationToken);
     }
 
     public Task UpdateAsync(Versement versement, CancellationToken cancellationToken = default)
     {
+        _dbContext.ExigerVerrou(versement.TontineId);
         _dbContext.Versements.Update(versement);
         return Task.CompletedTask;
     }

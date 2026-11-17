@@ -187,15 +187,10 @@ internal sealed class PaymentTestDbContext : DbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        // Clear domain events (simplified - no outbox for test context)
-        var domainEvents = ChangeTracker.Entries<AggregateRoot<object>>()
+        // Same collection as TontineDbContext (no outbox for the test context): every aggregate, whatever its id type.
+        var domainEvents = ChangeTracker.Entries<IHasDomainEvents>()
             .Where(e => e.Entity.DomainEvents.Count != 0)
-            .SelectMany(e =>
-            {
-                var events = e.Entity.DomainEvents.ToList();
-                e.Entity.ClearDomainEvents();
-                return events;
-            })
+            .SelectMany(e => e.Entity.PopDomainEvents())
             .ToList();
 
         var result = await base.SaveChangesAsync(cancellationToken);

@@ -23,7 +23,8 @@ public interface IAuditEntryRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets the last audit entry (most recent) for a tontine.
+    /// Gets the last audit entry of a tontine: the tail of its hash chain (the entry no other one chains on).
+    /// Read it under the tontine lock.
     /// </summary>
     Task<AuditEntry?> GetLastByTontineAsync(
         TontineId tontineId,

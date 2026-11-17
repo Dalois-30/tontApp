@@ -23,6 +23,21 @@ public class PaymentFlowIntegrationTests
     private readonly Mock<IMobileMoneyGateway> _gatewayMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IAuditTrailService> _auditMock;
+    private readonly VerrouSansEffet _verrou = new();
+
+    /// <summary>The versement as the repository returns it (tracked, no-tracking and its tontine id).</summary>
+    private void SetupVersement(Versement? versement)
+    {
+        _versementRepoMock
+            .Setup(r => r.GetByIdAsync(It.IsAny<VersementId>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(versement);
+        _versementRepoMock
+            .Setup(r => r.GetByIdSansSuiviAsync(It.IsAny<VersementId>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(versement);
+        _versementRepoMock
+            .Setup(r => r.GetTontineIdAsync(It.IsAny<VersementId>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(versement?.TontineId);
+    }
 
     public PaymentFlowIntegrationTests()
     {
@@ -55,7 +70,8 @@ public class PaymentFlowIntegrationTests
             _versementRepoMock.Object,
             _gatewayMock.Object,
             _unitOfWorkMock.Object,
-            _auditMock.Object);
+            _auditMock.Object,
+            _verrou);
 
         var command = new InitierVersementCommand(
             TontineId: Guid.NewGuid(),
@@ -88,6 +104,8 @@ public class PaymentFlowIntegrationTests
             Times.Once);
 
         _unitOfWorkMock.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(1, _verrou.Verrouillages);
+        Assert.Equal(1, _verrou.Validations);
     }
 
     [Fact]
@@ -116,7 +134,8 @@ public class PaymentFlowIntegrationTests
             _versementRepoMock.Object,
             _gatewayMock.Object,
             _unitOfWorkMock.Object,
-            _auditMock.Object);
+            _auditMock.Object,
+            _verrou);
 
         var command = new InitierVersementCommand(
             TontineId: tontineId.Value,
@@ -139,6 +158,8 @@ public class PaymentFlowIntegrationTests
                 v.HashCourant != v.HashPrecedent),
             It.IsAny<CancellationToken>()),
             Times.Once);
+        Assert.Equal(1, _verrou.Verrouillages);
+        Assert.Equal(1, _verrou.Validations);
     }
 
     [Fact]
@@ -151,16 +172,15 @@ public class PaymentFlowIntegrationTests
             PayeurId.From(Guid.NewGuid()),
             Montant.Create(500m));
 
-        _versementRepoMock
-            .Setup(r => r.GetByIdAsync(It.IsAny<VersementId>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(versement);
+        SetupVersement(versement);
 
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         var handler = new ConfirmVersementCommandHandler(
             _versementRepoMock.Object,
             _unitOfWorkMock.Object,
-            _auditMock.Object);
+            _auditMock.Object,
+            _verrou);
 
         var command = new ConfirmVersementCommand(versement.Id.Value, "TXN-ORANGE-123");
 
@@ -172,6 +192,8 @@ public class PaymentFlowIntegrationTests
         Assert.Equal("TXN-ORANGE-123", versement.ReferenceExterne);
         Assert.NotNull(versement.ConfirmedAt);
         Assert.True(versement.VerifierIntegrite());
+        Assert.Equal(1, _verrou.Verrouillages);
+        Assert.Equal(1, _verrou.Validations);
     }
 
     [Fact]
@@ -184,16 +206,15 @@ public class PaymentFlowIntegrationTests
             PayeurId.From(Guid.NewGuid()),
             Montant.Create(500m));
 
-        _versementRepoMock
-            .Setup(r => r.GetByIdAsync(It.IsAny<VersementId>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(versement);
+        SetupVersement(versement);
 
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         var handler = new RejeterVersementCommandHandler(
             _versementRepoMock.Object,
             _unitOfWorkMock.Object,
-            _auditMock.Object);
+            _auditMock.Object,
+            _verrou);
 
         var command = new RejeterVersementCommand(versement.Id.Value, "Insufficient funds");
 
@@ -203,6 +224,8 @@ public class PaymentFlowIntegrationTests
         // Assert
         Assert.Equal(VersementStatus.Echoue, versement.Statut);
         Assert.True(versement.VerifierIntegrite());
+        Assert.Equal(1, _verrou.Verrouillages);
+        Assert.Equal(1, _verrou.Validations);
     }
 
     [Fact]
@@ -217,22 +240,23 @@ public class PaymentFlowIntegrationTests
 
         versement.Confirmer("TXN-FIRST");
 
-        _versementRepoMock
-            .Setup(r => r.GetByIdAsync(It.IsAny<VersementId>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(versement);
+        SetupVersement(versement);
 
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         var handler = new ConfirmVersementCommandHandler(
             _versementRepoMock.Object,
             _unitOfWorkMock.Object,
-            _auditMock.Object);
+            _auditMock.Object,
+            _verrou);
 
         var command = new ConfirmVersementCommand(versement.Id.Value, "TXN-DUPLICATE");
 
         // Act & Assert - Idempotence: second confirmation throws
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.Handle(command, CancellationToken.None));
+        Assert.Equal(1, _verrou.Verrouillages);
+        Assert.Equal(0, _verrou.Validations);
 
         // Verify that the first confirmation is preserved
         Assert.Equal(VersementStatus.Confirme, versement.Statut);
@@ -251,36 +275,36 @@ public class PaymentFlowIntegrationTests
 
         versement.Rejeter("First failure");
 
-        _versementRepoMock
-            .Setup(r => r.GetByIdAsync(It.IsAny<VersementId>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(versement);
+        SetupVersement(versement);
 
         _unitOfWorkMock.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
         var handler = new RejeterVersementCommandHandler(
             _versementRepoMock.Object,
             _unitOfWorkMock.Object,
-            _auditMock.Object);
+            _auditMock.Object,
+            _verrou);
 
         var command = new RejeterVersementCommand(versement.Id.Value, "Second failure");
 
         // Act & Assert - Duplicate rejection throws
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.Handle(command, CancellationToken.None));
+        Assert.Equal(1, _verrou.Verrouillages);
+        Assert.Equal(0, _verrou.Validations);
     }
 
     [Fact]
     public async Task ConfirmerVersement_NotFound_ThrowsInvalidOperationException()
     {
         // Arrange
-        _versementRepoMock
-            .Setup(r => r.GetByIdAsync(It.IsAny<VersementId>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Versement?)null);
+        SetupVersement((Versement?)null);
 
         var handler = new ConfirmVersementCommandHandler(
             _versementRepoMock.Object,
             _unitOfWorkMock.Object,
-            _auditMock.Object);
+            _auditMock.Object,
+            _verrou);
 
         var command = new ConfirmVersementCommand(Guid.NewGuid(), "TXN-UNKNOWN");
 
@@ -289,6 +313,8 @@ public class PaymentFlowIntegrationTests
             () => handler.Handle(command, CancellationToken.None));
 
         Assert.Contains("not found", ex.Message);
+        Assert.Equal(0, _verrou.Verrouillages);
+        Assert.Equal(0, _verrou.Validations);
     }
 
     [Fact]

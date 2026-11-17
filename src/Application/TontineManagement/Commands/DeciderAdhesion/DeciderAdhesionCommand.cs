@@ -1,6 +1,7 @@
 namespace Application.TontineManagement.Commands.DeciderAdhesion;
 
 using Application.Common;
+using Application.PaymentManagement.Services;
 using Domain.Common;
 using Domain.TontineManagement.Repositories;
 using Domain.TontineManagement.ValueObjects;
@@ -12,15 +13,20 @@ public sealed class DeciderAdhesionCommandHandler : ICommandHandler<DeciderAdhes
 {
     private readonly ITontineRepository _tontines;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IVerrouTontine _verrou;
 
-    public DeciderAdhesionCommandHandler(ITontineRepository tontines, IUnitOfWork unitOfWork)
+    public DeciderAdhesionCommandHandler(ITontineRepository tontines, IUnitOfWork unitOfWork, IVerrouTontine verrou)
     {
         _tontines = tontines;
         _unitOfWork = unitOfWork;
+        _verrou = verrou;
     }
 
     public async Task<Result> Handle(DeciderAdhesionCommand request, CancellationToken cancellationToken)
     {
+        // Same per-tontine lock as the payment writers: a round closed / opened or a member suspended /
+        // admitted never interleaves with a declaration or validation checking who owes what.
+        await using var verrou = await _verrou.VerrouillerAsync(TontineId.From(request.TontineId), cancellationToken);
         var tontine = await _tontines.GetByIdAsync(TontineId.From(request.TontineId), cancellationToken);
         if (tontine is null)
             return Result.Failure("Tontine not found.");
@@ -38,6 +44,7 @@ public sealed class DeciderAdhesionCommandHandler : ICommandHandler<DeciderAdhes
 
         await _tontines.UpdateAsync(tontine, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await verrou.ValiderAsync(cancellationToken);
         return Result.Success();
     }
 }

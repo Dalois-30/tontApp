@@ -61,6 +61,17 @@ internal sealed class TestVersementRepository : IVersementRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<TontineId?> GetTontineIdAsync(VersementId id, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Versements.AsNoTracking()
+            .Where(v => v.Id == id).Select(v => v.TontineId).FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<Versement?> GetByIdSansSuiviAsync(VersementId id, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Versements.AsNoTracking().FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
+    }
+
     public async Task<Versement?> GetLastByTontineAsync(
         TontineId tontineId, CancellationToken cancellationToken = default)
     {
@@ -138,5 +149,33 @@ internal sealed class TestAuditEntryRepository : IAuditEntryRepository
     public async Task AddAsync(AuditEntry entry, CancellationToken cancellationToken = default)
     {
         await _dbContext.AuditEntries.AddAsync(entry, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Lock that does nothing, for handler tests on mocks (the real per-tontine PostgreSQL lock is exercised
+/// by the API tests on a real database).
+/// </summary>
+internal sealed class VerrouSansEffet : Application.PaymentManagement.Services.IVerrouTontine
+{
+    public int Verrouillages { get; private set; }
+    public int Validations { get; private set; }
+
+    public Task<Application.PaymentManagement.Services.ITransactionVerrouillee> VerrouillerAsync(
+        TontineId tontineId, CancellationToken cancellationToken = default)
+    {
+        Verrouillages++;
+        return Task.FromResult<Application.PaymentManagement.Services.ITransactionVerrouillee>(new Transaction(this));
+    }
+
+    private sealed class Transaction(VerrouSansEffet parent) : Application.PaymentManagement.Services.ITransactionVerrouillee
+    {
+        public Task ValiderAsync(CancellationToken cancellationToken = default)
+        {
+            parent.Validations++;
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

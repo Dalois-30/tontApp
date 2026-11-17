@@ -26,6 +26,9 @@ using Testcontainers.Redis;
 /// </summary>
 public sealed class ApiFactory : WebApplicationFactory<Api.Program>, IAsyncLifetime
 {
+    /// <summary>Bounded wait for a tontine's lock in the API under test.</summary>
+    public const int DelaiVerrouMs = 3000;
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder().WithImage("postgres:16-alpine").Build();
     private readonly RedisContainer _redis = new RedisBuilder().WithImage("redis:7-alpine").Build();
 
@@ -70,6 +73,9 @@ public sealed class ApiFactory : WebApplicationFactory<Api.Program>, IAsyncLifet
         ("Jwt:Secret", "api-tests-secret-key-that-is-long-enough-0123456789"),
         ("Serilog:MinimumLevel:Default", "Warning"),
         ("Serilog:SeqUrl", "http://127.0.0.1:1"),
+        // Short bounded wait for a tontine's lock, so that the 503 "réessayez" path is testable quickly while
+        // leaving the tests that hold a lock enough time to observe the waiting requests in pg_locks.
+        ("VerrouTontine:DelaiAttenteMs", ApiFactory.DelaiVerrouMs.ToString()),
     ];
 
     /// <summary>Creates an account and returns a client authenticated as that account.</summary>

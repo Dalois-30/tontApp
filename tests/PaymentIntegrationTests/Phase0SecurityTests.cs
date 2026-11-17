@@ -107,7 +107,9 @@ public class Phase0SecurityTests
     // ── Manual payment ──────────────────────────────────────────────
 
     private EnregistrerVersementManuelCommandHandler ManuelHandler() =>
-        new(_versementRepo.Object, _tontineRepo.Object, _audit.Object, _uow.Object);
+        new(_versementRepo.Object, _tontineRepo.Object, _audit.Object, _uow.Object, _verrou);
+
+    private readonly VerrouSansEffet _verrou = new();
 
     private void SetupNoExistingVersements()
     {
@@ -135,6 +137,8 @@ public class Phase0SecurityTests
             ActeurId: _gestionnaire.Value), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(1);
         added.Should().NotBeNull();
         added!.Statut.Should().Be(VersementStatus.EnAttente);
         result.Value.Should().Be(added.Id.Value);
@@ -157,6 +161,8 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour.Id.Value, membre.Id.Value, 5000m, "Espèces"), CancellationToken.None);
 
         result.IsSuccess.Should().BeFalse();
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(0);
         result.Error.Should().Contain("active member");
         _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -176,6 +182,8 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour1.Id.Value, tardif.Id.Value, 5000m, "Espèces"), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue(result.Error);
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(1);
         _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -191,6 +199,8 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour.Id.Value, tour.BeneficiaryId.Value, 5000m, "Espèces"), CancellationToken.None);
 
         result.IsSuccess.Should().BeFalse();
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(0);
         result.Error.Should().Contain("bénéficiaire du tour 1");
         _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -224,6 +234,8 @@ public class Phase0SecurityTests
             CancellationToken.None);
 
         result.IsSuccess.Should().BeFalse();
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(0);
         _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -238,6 +250,8 @@ public class Phase0SecurityTests
             CancellationToken.None);
 
         result.IsSuccess.Should().BeFalse();
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(0);
     }
 
     [Fact]
@@ -255,6 +269,8 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour.Id.Value, membre.Id.Value, 5000m, "x"), CancellationToken.None);
 
         result.IsSuccess.Should().BeFalse();
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(0);
     }
 
     private (Tontine, Round, Member) AvecVersementsExistants(params (decimal Montant, bool Confirme)[] existants)
@@ -283,6 +299,8 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour.Id.Value, membre.Id.Value, 3000m, "Espèces"), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue(result.Error);
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(1);
     }
 
     [Fact]
@@ -294,6 +312,8 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour.Id.Value, membre.Id.Value, 3000m, "Espèces"), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue(result.Error);
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(1);
     }
 
     [Fact]
@@ -305,6 +325,8 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour.Id.Value, membre.Id.Value, 1000m, "Espèces"), CancellationToken.None);
 
         result.IsSuccess.Should().BeFalse();
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(0);
         result.Error.Should().Contain("couverte").And.Contain("en attente de validation");
         _versementRepo.Verify(r => r.AddAsync(It.IsAny<Versement>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -319,6 +341,8 @@ public class Phase0SecurityTests
 
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Contain("entièrement payée");
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(0);
     }
 
     // ── Surplus carried over: the declaration check uses the same rule ──
@@ -356,6 +380,8 @@ public class Phase0SecurityTests
             tontine.Id.Value, tour.Id.Value, membre.Id.Value, 10000m, "Espèces"), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue(result.Error);
+        _verrou.Verrouillages.Should().Be(1);
+        _verrou.Validations.Should().Be(1);
     }
 
     [Fact]
