@@ -22,6 +22,7 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { FormInput } from '../../components/FormInput';
 import { colors, spacing, fontSizes, borderRadius } from '../../config/theme';
+import { nomPrerempli } from '../../utils/saisie';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'RejoindreParCode'>;
 
@@ -29,17 +30,13 @@ export function RejoindreParCodeScreen({
   navigation,
 }: Props): React.JSX.Element {
   const [code, setCode] = useState('');
-  const [memberName, setMemberName] = useState('');
+  const [nomSaisi, setNomSaisi] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const user = useAuthStore((s) => s.user);
 
-  // Pre-fill member name from user profile
-  React.useEffect(() => {
-    if (user?.nom) {
-      setMemberName(user.nom);
-    }
-  }, [user]);
+  // Pre-filled from the profile until the user types a name.
+  const memberName = nomPrerempli(nomSaisi, user?.nom);
 
   const handleJoin = useCallback(async () => {
     const trimmedCode = code.trim();
@@ -130,7 +127,7 @@ export function RejoindreParCodeScreen({
           label="Votre nom dans le groupe"
           value={memberName}
           onChangeText={(text) => {
-            setMemberName(text);
+            setNomSaisi(text);
             setError(null);
           }}
           placeholder="Entrez votre nom"

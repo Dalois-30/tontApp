@@ -2,7 +2,7 @@
  * A member declares the payment they made (amount, method, receipt reference); it waits for the
  * trésorier's validation. The responsable or the trésorier can declare for a member without a phone.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '../../../navigation/types';
@@ -12,7 +12,8 @@ import { formatMontant } from '../../../utils/format';
 import { spacing } from '../../../config/theme';
 import { projetService, messageErreur } from '../../../services/projetService';
 import { useProjet, ChoixPersonne } from './commun';
-import { roles } from './statuts';
+import { roles, montantSuggere } from './statuts';
+import { saisieCourante, type Saisie } from '../../../utils/saisie';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'DeclarerPaiement'>;
 
@@ -23,7 +24,7 @@ export function DeclarerPaiementScreen({ route, navigation }: Props): React.JSX.
   const { data: p, error, remplacer } = useProjet(projetId);
   const [pour, setPour] = useState<string | null>(null);
   const [choix, setChoix] = useState(false);
-  const [montant, setMontant] = useState('');
+  const [saisie, setSaisie] = useState<Saisie | null>(null);
   const [moyenChoisi, setMoyen] = useState('Espèces');
   const [preuve, setPreuve] = useState('');
   const [busy, setBusy] = useState(false);
@@ -33,10 +34,9 @@ export function DeclarerPaiementScreen({ route, navigation }: Props): React.JSX.
   const cibleId = pour ?? p?.monParticipantId ?? null;
   const cible = p?.participants.find((x) => x.id === cibleId);
 
-  // Suggest what is due today, or one instalment at the current tier.
-  useEffect(() => {
-    if (cible) setMontant(String(cible.resteDuExigible > 0 ? cible.resteDuExigible : cible.palierActuel));
-  }, [cible?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Suggest what is due today, or one instalment at the current tier; a typed amount is kept across a
+  // refetch and dropped when the member changes (the suggestion comes back).
+  const montant = saisieCourante(saisie, cible?.id ?? '') ?? montantSuggere(cible);
 
   if (error) return <View style={s.contenu}><ErrorBanner message={error.message} /></View>;
   if (!p) return <View style={s.contenu}><Text style={s.muted}>Chargement…</Text></View>;
@@ -83,7 +83,7 @@ export function DeclarerPaiementScreen({ route, navigation }: Props): React.JSX.
       ) : null}
 
       <Text style={s.champLabel}>Montant versé (FCFA)</Text>
-      <TextInput style={s.champ} keyboardType="number-pad" value={montant} onChangeText={setMontant} accessibilityLabel="Montant versé en FCFA" />
+      <TextInput style={s.champ} keyboardType="number-pad" value={montant} onChangeText={(valeur) => setSaisie({ cle: cible?.id ?? '', valeur })} accessibilityLabel="Montant versé en FCFA" />
 
       <Text style={s.champLabel}>Moyen de paiement</Text>
       <View style={s.puces}>
@@ -99,7 +99,7 @@ export function DeclarerPaiementScreen({ route, navigation }: Props): React.JSX.
         visible={choix}
         titre="Qui a payé ?"
         personnes={p.participants.map((x) => ({ id: x.id, nom: x.nom, detail: `Palier ${formatMontant(x.palierActuel)} · doit ${formatMontant(x.resteDuExigible)}` }))}
-        onChoisir={(x) => { setPour(x.id); setChoix(false); }}
+        onChoisir={(x) => { if (x.id !== cible?.id) setSaisie(null); setPour(x.id); setChoix(false); }}
         onFermer={() => setChoix(false)}
       />
     </ScrollView>

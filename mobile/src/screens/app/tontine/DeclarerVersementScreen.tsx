@@ -3,7 +3,7 @@
  * method, reference. It waits for the trésorier's validation. The responsable or the trésorier can
  * declare for a member without a smartphone.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -16,7 +16,8 @@ import { useAuthStore } from '../../../store/authStore';
 import { tontineService } from '../../../services/tontineService';
 import { ChoixPersonne } from '../projet/commun';
 import { useTontine, messageErreur } from './commun';
-import { rolesTontine, monMembre, toursDus } from './logique';
+import { rolesTontine, monMembre, toursDus, tourParDefaut, cleSaisieVersement, montantPropose } from './logique';
+import { saisieCourante, type Saisie } from '../../../utils/saisie';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'DeclarerVersement'>;
 
@@ -30,8 +31,8 @@ export function DeclarerVersementScreen({ route, navigation }: Props): React.JSX
   const { tontine: t, gouvernance, error } = useTontine(tontineId);
   const [pour, setPour] = useState<string | null>(null);
   const [choix, setChoix] = useState(false);
-  const [tourId, setTourId] = useState<string | null>(null);
-  const [montant, setMontant] = useState('');
+  const [tourChoisi, setTourChoisi] = useState<string | null>(null);
+  const [saisie, setSaisie] = useState<Saisie | null>(null);
   const [moyen, setMoyen] = useState('Espèces');
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
@@ -44,17 +45,12 @@ export function DeclarerVersementScreen({ route, navigation }: Props): React.JSX
 
   // Default: the first round owed (the open one, else the oldest unpaid), one contribution.
   // Keep the chosen round while it is still due; otherwise (new member, refetch) take the first one due.
-  useEffect(() => {
-    setTourId((actuel) => (actuel && dus.some((x) => x.id === actuel) ? actuel : dus[0]?.id ?? null));
-  }, [dus]);
-  // Proposed amount: what remains on the chosen round (the full contribution, or the rest of a partial payment).
-  // Re-proposed when the round changes; a refetch only updates it while the user has not typed an amount.
-  const [montantSaisi, setMontantSaisi] = useState(false);
+  const tourId = tourParDefaut(dus, tourChoisi);
+  // Proposed amount: what remains on the chosen round. A typed amount is kept across a refetch and
+  // dropped when the member or the round changes (the proposal comes back).
+  const cleSaisie = cleSaisieVersement(cible?.id, tourId);
   const resteChoisi = dus.find((x) => x.id === tourId)?.reste;
-  useEffect(() => { setMontantSaisi(false); }, [tourId]);
-  useEffect(() => {
-    if (!montantSaisi) setMontant(resteChoisi !== undefined ? String(resteChoisi) : t ? String(t.montantCotisation) : '');
-  }, [tourId, resteChoisi, montantSaisi, t?.montantCotisation]); // eslint-disable-line react-hooks/exhaustive-deps
+  const montant = montantPropose(saisieCourante(saisie, cleSaisie), resteChoisi, t?.montantCotisation);
 
   if (error) return <View style={s.contenu}><ErrorBanner message={error.message} /></View>;
   if (!t || !gouvernance) return <View style={s.contenu}><Text style={s.muted}>Chargement…</Text></View>;
@@ -125,13 +121,13 @@ export function DeclarerVersementScreen({ route, navigation }: Props): React.JSX
           {dus.map((x) => (
             <Puce key={x.id}
               texte={`Tour ${x.numero}${x.estOuvert ? ' (en cours)' : ' (en retard)'}${x.reste < t.montantCotisation ? ` · reste ${formatMontant(x.reste)}` : ''}`}
-              actif={tourId === x.id} onPress={() => setTourId(x.id)} />
+              actif={tourId === x.id} onPress={() => { if (x.id !== tourId) setSaisie(null); setTourChoisi(x.id); }} />
           ))}
         </View>
       )}
 
       <Text style={s.champLabel}>Montant versé (FCFA)</Text>
-      <TextInput style={s.champ} keyboardType="number-pad" value={montant} onChangeText={(x) => { setMontant(x); setMontantSaisi(true); }} accessibilityLabel="Montant versé en FCFA" />
+      <TextInput style={s.champ} keyboardType="number-pad" value={montant} onChangeText={(valeur) => setSaisie({ cle: cleSaisie, valeur })} accessibilityLabel="Montant versé en FCFA" />
 
       <Text style={s.champLabel}>Moyen de paiement</Text>
       <View style={s.puces}>
@@ -151,7 +147,7 @@ export function DeclarerVersementScreen({ route, navigation }: Props): React.JSX
           id: m.id, nom: m.nom,
           detail: (m.resteDu ?? 0) > 0 ? `doit ${formatMontant(m.resteDu ?? 0)} sur les tours passés` : undefined,
         }))}
-        onChoisir={(x) => { setPour(x.id); setChoix(false); }}
+        onChoisir={(x) => { if (x.id !== cible?.id) setSaisie(null); setPour(x.id); setChoix(false); }}
         onFermer={() => setChoix(false)}
       />
     </ScrollView>

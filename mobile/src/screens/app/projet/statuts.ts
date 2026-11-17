@@ -30,3 +30,7 @@ export const STATUT_PARTICIPANT: Record<Participant['statut'], { label: string; 
 
 /** "Import du registre · OM" -> "OM" ; any other proof is shown as entered. */
 export const moyen = (preuve: string) => preuve.replace(/^Import du registre · /, '');
+
+/** Amount proposed when declaring a payment for a participant: what is due today, else one instalment at the current tier. */
+export const montantSuggere = (cible?: Pick<Participant, 'resteDuExigible' | 'palierActuel'>): string =>
+  cible ? String(cible.resteDuExigible > 0 ? cible.resteDuExigible : cible.palierActuel) : '';

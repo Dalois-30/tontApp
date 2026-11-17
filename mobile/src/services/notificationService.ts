@@ -89,6 +89,8 @@ export async function registerForPushNotifications(): Promise<void> {
     // Set up the Android notification channel
     await Notifications.setNotificationChannelAsync('default', {
       name: 'TontApp',
+      // AndroidImportance is exported at runtime; eslint-plugin-import cannot see the enum in the compiled SDK 58 build.
+      // eslint-disable-next-line import/namespace
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#1B5E20',

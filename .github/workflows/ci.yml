@@ -107,6 +107,84 @@ jobs:
           NEXT_TELEMETRY_DISABLED: 1
         run: npm run build
 
+      # Mobile : la configuration Expo (plugins compris) se résout et le bundle JS se construit.
+      - name: Expo config
+        if: matrix.projet == 'mobile'
+        env:
+          CI: 1
+        run: npx expo config --type prebuild > /dev/null
+
+      - name: Bundle JS
+        if: matrix.projet == 'mobile'
+        env:
+          CI: 1
+          EXPO_PUBLIC_API_URL: http://localhost:5243
+        run: |
+          sortie="$RUNNER_TEMP/bundle"
+          mkdir -p "$sortie/res"
+          npx expo export:embed --platform android --dev false --entry-file index.ts \
+            --bundle-output "$sortie/index.android.bundle" --assets-dest "$sortie/res"
+
+  # APK Android debug : projet natif régénéré (prebuild --clean), bundle embarqué, APK en artefact.
+  android-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [ front ]
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Prebuild
+        env:
+          CI: 1
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Bundle JS
+        env:
+          CI: 1
+          EXPO_PUBLIC_API_URL: http://localhost:5243
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx expo export:embed --platform android --dev false --entry-file index.ts \
+            --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
+
+      - name: Assemble debug APK
+        working-directory: mobile/android
+        run: ./gradlew app:assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
   docker-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

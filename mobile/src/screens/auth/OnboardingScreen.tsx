@@ -12,7 +12,7 @@ import {
   FlatList,
   Dimensions,
   TouchableOpacity,
-  type ViewToken,
+  type ListViewToken,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, fontSizes, borderRadius } from '../../config/theme';
@@ -58,19 +58,20 @@ interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Onboarding'>;
 }
 
+const VIEWABILITY_CONFIG = { viewAreaCoveragePercentThreshold: 50 };
+
 export function OnboardingScreen({ navigation }: Props): React.JSX.Element {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-        setCurrentIndex(viewableItems[0].index);
-      }
+  // Created once for the component's lifetime (FlatList throws if it changes on the fly); a useState
+  // initialiser guarantees the identity, which useCallback does not.
+  const [onViewableItemsChanged] = useState(
+    () => ({ viewableItems }: { viewableItems: ListViewToken[] }) => {
+      const index = viewableItems[0]?.index;
+      if (index != null) setCurrentIndex(index);
     },
-  ).current;
-
-  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+  );
 
   const handleNext = () => {
     if (currentIndex < slides.length - 1) {
@@ -110,7 +111,7 @@ export function OnboardingScreen({ navigation }: Props): React.JSX.Element {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
+        viewabilityConfig={VIEWABILITY_CONFIG}
       />
 
       {/* Dots indicator */}

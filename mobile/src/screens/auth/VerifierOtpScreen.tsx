@@ -9,6 +9,7 @@ import {
   View,
   Text,
   TextInput,
+  type TextInputInstance,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
@@ -29,7 +30,7 @@ export function VerifierOtpScreen({ route }: Props): React.JSX.Element {
   const { telephone, nom } = route.params;
   const [code, setCode] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [localError, setLocalError] = useState<string | null>(null);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
   const { verifierOtp, isLoading, error: authError } = useAuth();
 
   const handleChange = useCallback(

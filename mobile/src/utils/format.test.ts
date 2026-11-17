@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMontant, libellePeriodicite, libelleStatut, libelleStatutTour } from './format';
+import { formatMontant, libellePeriodicite, libelleStatut, libelleStatutTour, timeRemaining } from './format';
 
 describe('formatMontant', () => {
   it('sépare les milliers et ajoute FCFA', () => {
@@ -62,5 +62,16 @@ describe('libelleStatut / libellePeriodicite', () => {
     expect(libellePeriodicite('Monthly')).toBe('Mensuelle');
     expect(libellePeriodicite('Weekly')).toBe('Hebdomadaire');
     expect(libellePeriodicite('Daily')).toBe('Daily');
+  });
+});
+
+describe('timeRemaining (compte à rebours)', () => {
+  const cible = '2026-01-01T12:00:00Z';
+  it('calcule le temps restant depuis l’instant donné', () => {
+    expect(timeRemaining(cible, new Date('2026-01-01T10:58:57Z'))).toEqual({ hours: 1, minutes: 1, seconds: 3, totalSeconds: 3663, isExpired: false });
+  });
+  it('terminé à l’échéance et après', () => {
+    expect(timeRemaining(cible, new Date(cible)).isExpired).toBe(true);
+    expect(timeRemaining(cible, new Date('2026-01-02T00:00:00Z'))).toMatchObject({ totalSeconds: 0, isExpired: true });
   });
 });

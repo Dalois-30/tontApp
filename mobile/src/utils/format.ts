@@ -28,9 +28,9 @@ export function daysUntil(targetDate: string | Date): number {
 }
 
 /**
- * Calculate the remaining time until a target date in hours, minutes, seconds.
+ * Calculate the remaining time until a target date in hours, minutes, seconds (from `now`, default: the current time).
  */
-export function timeRemaining(targetDate: string | Date): {
+export function timeRemaining(targetDate: string | Date, now: Date = new Date()): {
   hours: number;
   minutes: number;
   seconds: number;
@@ -38,7 +38,6 @@ export function timeRemaining(targetDate: string | Date): {
   isExpired: boolean;
 } {
   const target = typeof targetDate === 'string' ? new Date(targetDate) : targetDate;
-  const now = new Date();
   const diffMs = target.getTime() - now.getTime();
 
   if (diffMs <= 0) {

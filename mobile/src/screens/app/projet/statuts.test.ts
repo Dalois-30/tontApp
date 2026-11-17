@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjetDetails } from '../../../services/projetService';
-import { ECHEANCE, moyen, PAIEMENT, roles, STATUT_PARTICIPANT } from './statuts';
+import { ECHEANCE, montantSuggere, moyen, PAIEMENT, roles, STATUT_PARTICIPANT } from './statuts';
+import { saisieCourante } from '../../../utils/saisie';
 
 describe('statuts des projets', () => {
   it('échéances', () => {
@@ -38,5 +39,19 @@ describe('roles (projet)', () => {
     expect(roles(p(['admin']))).toEqual({ responsable: true, tresorier: true });
     expect(roles(p(['participant']))).toEqual({ responsable: false, tresorier: false });
     expect(roles(p([]))).toEqual({ responsable: false, tresorier: false });
+  });
+});
+
+describe('déclaration de paiement : montant proposé', () => {
+  it('propose ce qui est exigible aujourd’hui, sinon une échéance au palier actuel, sinon rien', () => {
+    expect(montantSuggere({ resteDuExigible: 15000, palierActuel: 5000 })).toBe('15000');
+    expect(montantSuggere({ resteDuExigible: 0, palierActuel: 5000 })).toBe('5000');
+    expect(montantSuggere(undefined)).toBe('');
+  });
+  it('garde le montant saisi pour le même membre, repropose pour un autre membre', () => {
+    const saisie = { cle: 'p1', valeur: '2000' };
+    const b = { resteDuExigible: 0, palierActuel: 5000 };
+    expect(saisieCourante(saisie, 'p1') ?? montantSuggere(b)).toBe('2000');
+    expect(saisieCourante(saisie, 'p2') ?? montantSuggere(b)).toBe('5000');
   });
 });

@@ -1,5 +1,5 @@
 # Commandes de dev locales (voir scripts/dev.sh)
-.PHONY: help up down api test test-lots test-front build restart logs psql reset seed otp dashboard mobile
+.PHONY: help up down api test test-lots test-front build restart logs psql reset seed otp dashboard mobile mobile-apk
 
 help: ## Liste des commandes
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -49,3 +49,16 @@ dashboard: ## Lance le dashboard web sur http://localhost:3000
 mobile: ## Lance Metro pour l'app Android branchée en USB (adb)
 	adb reverse tcp:5243 tcp:5243 && adb reverse tcp:8081 tcp:8081
 	cd mobile && EXPO_PUBLIC_API_URL=http://localhost:5243 npx expo start --localhost
+
+# Gradle est gourmand : au moins APK_MIN_MO Mo libres avant de commencer.
+APK_MIN_MO ?= 4096
+mobile-apk: ## APK debug arm64 : prebuild --clean (requis après un changement de SDK Expo), bundle JS, gradlew
+	@libre=$$(awk '/MemAvailable/ {print int($$2/1024)}' /proc/meminfo); \
+	  if [ "$$libre" -lt $(APK_MIN_MO) ]; then echo "Mémoire insuffisante : $$libre Mo libres, $(APK_MIN_MO) requis." >&2; exit 1; fi; \
+	  echo "▶ $$libre Mo libres"
+	cd mobile && CI=1 npx expo prebuild --platform android --clean --no-install
+	cd mobile && mkdir -p android/app/src/main/assets && EXPO_PUBLIC_API_URL=http://localhost:5243 npx expo export:embed \
+	  --platform android --dev false --entry-file index.ts \
+	  --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
+	cd mobile/android && ANDROID_HOME=$${ANDROID_HOME:-$$HOME/Android/Sdk} ./gradlew app:assembleDebug -PreactNativeArchitectures=arm64-v8a
+	@echo "APK : mobile/android/app/build/outputs/apk/debug/app-debug.apk"

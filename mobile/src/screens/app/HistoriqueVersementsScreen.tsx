@@ -157,7 +157,7 @@ export function HistoriqueVersementsScreen({
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={refetch}
+            onRefresh={() => void refetch()}
             colors={[colors.primary]}
             tintColor={colors.primary}
           />

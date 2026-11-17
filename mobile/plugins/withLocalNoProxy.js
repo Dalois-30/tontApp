@@ -6,7 +6,7 @@
  * data, Android then routes even http://localhost:5243 (adb reverse to the dev API) to the
  * carrier proxy, which answers 504. Other hosts keep using the system proxy unchanged.
  */
-const { withMainApplication } = require('@expo/config-plugins');
+const { withMainApplication } = require('expo/config-plugins');
 
 const IMPORTS = `import com.facebook.react.modules.network.OkHttpClientProvider
 import java.net.InetSocketAddress
@@ -37,14 +37,31 @@ const INSTALL = `    OkHttpClientProvider.setOkHttpClientFactory {
     }
 `;
 
-module.exports = function withLocalNoProxy(config) {
+const IMPORT_ANCHOR = /(import android\.app\.Application\n)/;
+const ONCREATE_ANCHOR = /(override fun onCreate\(\) \{\n\s*super\.onCreate\(\)\n)/;
+
+/**
+ * Adds the loopback-bypass proxy selector to a MainApplication.kt source. Throws when the template no longer
+ * has the expected anchors (a new Expo SDK template) instead of silently shipping an app without the bypass.
+ */
+function addLoopbackBypass(src) {
+  if (src.includes('LoopbackBypassProxySelector')) return src;
+  for (const [nom, ancre] of [['import android.app.Application', IMPORT_ANCHOR], ['onCreate() { super.onCreate()', ONCREATE_ANCHOR]]) {
+    if (!ancre.test(src)) {
+      throw new Error(`withLocalNoProxy: "${nom}" not found in MainApplication.kt; update the plugin for this Expo SDK template.`);
+    }
+  }
+  src = src.replace(IMPORT_ANCHOR, `$1${IMPORTS}`);
+  src = src.replace(ONCREATE_ANCHOR, `$1${INSTALL}`);
+  return `${src.trimEnd()}\n${SELECTOR}`;
+}
+
+function withLocalNoProxy(config) {
   return withMainApplication(config, (cfg) => {
-    let src = cfg.modResults.contents;
-    if (src.includes('LoopbackBypassProxySelector')) return cfg;
-    src = src.replace(/(import android\.app\.Application\n)/, `$1${IMPORTS}`);
-    src = src.replace(/(override fun onCreate\(\) \{\n\s*super\.onCreate\(\)\n)/, `$1${INSTALL}`);
-    src = `${src.trimEnd()}\n${SELECTOR}`;
-    cfg.modResults.contents = src;
+    cfg.modResults.contents = addLoopbackBypass(cfg.modResults.contents);
     return cfg;
   });
-};
+}
+
+module.exports = withLocalNoProxy;
+module.exports.addLoopbackBypass = addLoopbackBypass;

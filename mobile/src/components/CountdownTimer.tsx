@@ -4,7 +4,7 @@
  * Updates every second. Shows "Terminé" when expired.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors, spacing, fontSizes, borderRadius } from '../config/theme';
 import { URGENCY_THRESHOLD_DAYS } from '../config/constants';
@@ -21,19 +21,19 @@ export function CountdownTimer({
   targetDate,
   label = 'Temps restant',
 }: CountdownTimerProps): React.JSX.Element {
-  const computeRemaining = useCallback(
-    () => timeRemaining(targetDate),
-    [targetDate],
-  );
-  const [remaining, setRemaining] = useState(computeRemaining);
-
+  // The clock lives in state, updated every second; the ticking stops once the target is reached and
+  // restarts when the target date changes.
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    setRemaining(computeRemaining());
+    const fin = new Date(targetDate).getTime();
     const interval = setInterval(() => {
-      setRemaining(computeRemaining());
+      const instant = Date.now();
+      setNow(instant);
+      if (instant >= fin) clearInterval(interval);
     }, 1000);
     return () => clearInterval(interval);
-  }, [computeRemaining]);
+  }, [targetDate]);
+  const remaining = timeRemaining(targetDate, new Date(now));
 
   const pad = (n: number): string => n.toString().padStart(2, '0');
 

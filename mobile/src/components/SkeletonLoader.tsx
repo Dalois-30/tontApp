@@ -3,7 +3,7 @@
  * Renders placeholder shimmer blocks while data loads.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Animated, StyleSheet, type ViewStyle } from 'react-native';
 import { colors, borderRadius, spacing } from '../config/theme';
 
@@ -24,7 +24,7 @@ export function SkeletonLoader({
   radius = borderRadius.md,
   style,
 }: SkeletonLoaderProps): React.JSX.Element {
-  const opacity = useRef(new Animated.Value(0.3)).current;
+  const [opacity] = useState(() => new Animated.Value(0.3));
 
   useEffect(() => {
     const animation = Animated.loop(

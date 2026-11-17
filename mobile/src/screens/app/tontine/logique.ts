@@ -48,3 +48,21 @@ export const STATUT_VERSEMENT: Record<VersementTontine['status'], { label: strin
   en_attente: { label: 'À valider', ton: 'attente' },
   rejete: { label: 'Rejeté', ton: 'mauvais' },
 };
+
+/** Round selected in the declaration form: the chosen one while it is still due, else the first one due. */
+export const tourParDefaut = (dus: Pick<TourDu, 'id'>[], actuel: string | null): string | null =>
+  actuel !== null && dus.some((x) => x.id === actuel) ? actuel : dus[0]?.id ?? null;
+
+/** Context of an amount typed in the declaration form: the typed amount is dropped when the member or the round changes. */
+export const cleSaisieVersement = (membreId: string | undefined, tourId: string | null): string =>
+  `${membreId ?? ''}|${tourId ?? ''}`;
+
+/**
+ * Amount shown in the declaration form: what the user typed (even an emptied field), else what remains on
+ * the chosen round (the full contribution, or the rest of a partial payment), else the contribution.
+ */
+export function montantPropose(saisi: string | null, resteChoisi: number | undefined, montantCotisation: number | undefined): string {
+  if (saisi !== null) return saisi;
+  if (resteChoisi !== undefined) return String(resteChoisi);
+  return montantCotisation !== undefined ? String(montantCotisation) : '';
+}

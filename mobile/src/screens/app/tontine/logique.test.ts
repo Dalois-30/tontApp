@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TontineDetail, TontineMember } from '../../../types/api';
-import { monMembre, rolesTontine, STATUT_VERSEMENT, toursDus } from './logique';
+import { cleSaisieVersement, monMembre, montantPropose, rolesTontine, STATUT_VERSEMENT, tourParDefaut, toursDus } from './logique';
+import { saisieCourante, type Saisie } from '../../../utils/saisie';
 
 const COTISATION = 10000;
 
@@ -135,5 +136,41 @@ describe('STATUT_VERSEMENT', () => {
     expect(STATUT_VERSEMENT.confirme.label).toBe('Validé');
     expect(STATUT_VERSEMENT.en_attente.label).toBe('À valider');
     expect(STATUT_VERSEMENT.rejete.label).toBe('Rejeté');
+  });
+});
+
+describe('formulaire de déclaration : tour et montant proposés', () => {
+  const dus = [{ id: 'r3' }, { id: 'r1' }];
+
+  it('garde le tour choisi tant qu’il est dû', () => {
+    expect(tourParDefaut(dus, 'r1')).toBe('r1');
+  });
+  it('se replie sur le premier tour dû quand le tour choisi ne l’est plus, ou sans choix', () => {
+    expect(tourParDefaut(dus, 'r2')).toBe('r3');
+    expect(tourParDefaut(dus, null)).toBe('r3');
+    expect(tourParDefaut([], 'r1')).toBeNull();
+  });
+
+  it('propose le reste du tour, sinon la cotisation, sinon rien', () => {
+    expect(montantPropose(null, 4000, COTISATION)).toBe('4000');
+    expect(montantPropose(null, undefined, COTISATION)).toBe(String(COTISATION));
+    expect(montantPropose(null, undefined, undefined)).toBe('');
+  });
+
+  it('garde le montant saisi après une actualisation (même membre, même tour, reste recalculé)', () => {
+    const saisie: Saisie = { cle: cleSaisieVersement('m1', 'r3'), valeur: '2500' };
+    expect(montantPropose(saisieCourante(saisie, cleSaisieVersement('m1', 'r3')), 7000, COTISATION)).toBe('2500');
+  });
+  it('repropose le reste quand le tour change', () => {
+    const saisie: Saisie = { cle: cleSaisieVersement('m1', 'r3'), valeur: '2500' };
+    expect(montantPropose(saisieCourante(saisie, cleSaisieVersement('m1', 'r1')), 10000, COTISATION)).toBe('10000');
+  });
+  it('repropose le reste quand le membre change, même tour', () => {
+    const saisie: Saisie = { cle: cleSaisieVersement('m1', 'r3'), valeur: '2500' };
+    expect(montantPropose(saisieCourante(saisie, cleSaisieVersement('m2', 'r3')), 6000, COTISATION)).toBe('6000');
+  });
+  it('un champ vidé reste vide (pas remplacé par la proposition)', () => {
+    const saisie: Saisie = { cle: cleSaisieVersement('m1', 'r3'), valeur: '' };
+    expect(montantPropose(saisieCourante(saisie, cleSaisieVersement('m1', 'r3')), 7000, COTISATION)).toBe('');
   });
 });
