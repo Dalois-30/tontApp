@@ -27,3 +27,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-tableau-de-bord-bureau.md`
   summary: Sélecteur de tontine sur le web pour qui siège au bureau de plusieurs tontines (pages, paiements, audit transmettent tontineId).
   evidence: Seule la tontine par défaut est atteignable depuis le web ; l'API accepte déjà tontineId.
+- source_spec: `_bmad-output/implementation-artifacts/spec-alertes-retard-bureau.md`
+  summary: Lever PaiementEnRetardEvent (échéance d'un tour dépassée, cotisation impayée ou partielle) pour que le bureau soit réellement alerté des retards.
+  evidence: Aucun code ne crée cet événement ; les rappels planifiés (RappelJobs) n'écrivent qu'aux membres, le bureau n'est jamais prévenu.

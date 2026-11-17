@@ -30,6 +30,10 @@ public static class SmsTemplate
     public static string RetardPourGestionnaire(string nomTontine, decimal montant, string devise)
         => Truncate($"TontinesApp: Retard de paiement de {montant} {devise} dans {nomTontine}. Verifiez la situation.");
 
+    /// <summary>Alerte au bureau (responsable, trésorier) : qui est en retard, de combien.</summary>
+    public static string RetardPourBureau(string nomTontine, string nomMembre, decimal montant, string devise)
+        => Truncate($"TontinesApp: {nomMembre} est en retard de {montant} {devise} dans {nomTontine}. Verifiez la situation.");
+
     /// <summary>Récapitulatif hebdomadaire</summary>
     public static string RecapHebdomadaire(string nomTontine, int membresAJour, int totalMembres)
         => Truncate($"TontinesApp: Recap {nomTontine} - {membresAJour}/{totalMembres} membres a jour cette semaine.");
