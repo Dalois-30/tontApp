@@ -20,6 +20,13 @@ public class Notification : AggregateRoot<NotificationId>
     public DateTime CreatedAt { get; private set; }
     public DateTime? SentAt { get; private set; }
     public DateTime? DateEnvoi { get; private set; }
+    /// <summary>
+    /// Optional business key: at most one notification per (recipient, reference) is ever stored
+    /// (unique index), so a job can send a message exactly once even if it runs again or concurrently.
+    /// </summary>
+    public string? Reference { get; private set; }
+
+    public const int ReferenceMaxLength = 120;
 
     private Notification() : base()
     {
@@ -121,6 +128,21 @@ public class Notification : AggregateRoot<NotificationId>
 
         return notification;
     }
+
+    public void DefinirReference(string reference)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            throw new ArgumentException("Reference must not be empty.", nameof(reference));
+        if (reference.Length > ReferenceMaxLength)
+            throw new ArgumentException($"Reference must not exceed {ReferenceMaxLength} characters.", nameof(reference));
+        Reference = reference;
+    }
+
+    /// <summary>
+    /// Counts against the daily SMS quota of the recipient: not the critical ones (payment confirmations),
+    /// nor the bureau's late-payment recap (its alert must not be lost to the quota).
+    /// </summary>
+    public bool SoumiseAuQuota() => !EstCritique() && Type != NotificationType.RecapRetards;
 
     public void MarquerEnvoyee()
     {

@@ -79,6 +79,15 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
         builder.Property(n => n.DateEnvoi)
             .HasColumnName("date_envoi");
 
+        builder.Property(n => n.Reference)
+            .HasColumnName("reference")
+            .HasMaxLength(Notification.ReferenceMaxLength);
+
+        builder.HasIndex(n => new { n.DestinataireId, n.Reference })
+            .IsUnique()
+            .HasFilter("reference IS NOT NULL")
+            .HasDatabaseName("ux_notifications_destinataire_reference");
+
         builder.Ignore(n => n.DomainEvents);
     }
 }

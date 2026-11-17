@@ -80,4 +80,41 @@ public class NotificationDestinataireTests
             .Should().BeTrue();
         _added.Single().Type.Should().Be(NotificationType.ConfirmationPaiement);
     }
+
+    // ── Récapitulatif des retards au bureau : hors quota, unique par référence ──
+
+    [Fact]
+    public async Task RecapRetards_HorsQuotaJournalier_LesRappelsOrdinairesRestentLimites()
+    {
+        var u = User("+22670000020");
+        _repo.Setup(r => r.CountTodayByDestinataireAsync("+22670000020", It.IsAny<CancellationToken>())).ReturnsAsync(10);
+        _repo.Setup(r => r.AjouterSiReferenceAbsenteAsync(It.IsAny<Notification>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        (await Service().PlanifierNotificationAsync(u.Id.Value.ToString(), NotificationType.RappelPaiement, "Rappel"))
+            .Should().BeFalse();
+        (await Service().PlanifierNotificationUniqueAsync(u.Id.Value.ToString(), NotificationType.RecapRetards, "Retards", "recap:1"))
+            .Should().Be(ResultatPlanification.Planifiee);
+    }
+
+    [Fact]
+    public async Task Unique_ReferenceDejaPresente_DejaPlanifiee_AvecLeTelephoneEtLaReference()
+    {
+        var u = User("+22670000021");
+        Notification? recue = null;
+        _repo.Setup(r => r.AjouterSiReferenceAbsenteAsync(It.IsAny<Notification>(), It.IsAny<CancellationToken>()))
+            .Callback<Notification, CancellationToken>((n, _) => recue = n).ReturnsAsync(false);
+
+        (await Service().PlanifierNotificationUniqueAsync(u.Id.Value.ToString(), NotificationType.RecapRetards, "Retards", "recap:2"))
+            .Should().Be(ResultatPlanification.DejaPlanifiee);
+        recue!.DestinataireId.Should().Be("+22670000021");
+        recue.Reference.Should().Be("recap:2");
+        _added.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Unique_SansCompte_NonPlanifiee()
+    {
+        (await Service().PlanifierNotificationUniqueAsync(Guid.NewGuid().ToString(), NotificationType.RecapRetards, "Retards", "recap:3"))
+            .Should().Be(ResultatPlanification.NonPlanifiee);
+    }
 }

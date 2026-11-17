@@ -187,6 +187,12 @@ public class Program
                 job => job.ExecuteAsync(CancellationToken.None),
                 Cron.Daily(8, 0));
 
+            // RecapRetardsBureau: daily at 08:00 UTC (late payers of the rounds due yesterday, to the bureau)
+            RecurringJob.AddOrUpdate<Infrastructure.Jobs.RecapRetardsBureauJob>(
+                "recap-retards-bureau-quotidien",
+                job => job.ExecuteAsync(CancellationToken.None),
+                Cron.Daily(8, 0));
+
             // RecapHebdo: every Monday at 09:00 UTC
             RecurringJob.AddOrUpdate<Infrastructure.Jobs.RecapHebdoJob>(
                 "recap-hebdomadaire",

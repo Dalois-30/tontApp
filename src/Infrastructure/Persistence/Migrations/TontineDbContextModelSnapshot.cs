@@ -631,6 +631,11 @@ namespace Infrastructure.Persistence.Migrations
                         .HasDefaultValue(3)
                         .HasColumnName("max_tentatives");
 
+                    b.Property<string>("Reference")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("reference");
+
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("sent_at");
@@ -654,6 +659,11 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnName("type");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DestinataireId", "Reference")
+                        .IsUnique()
+                        .HasDatabaseName("ux_notifications_destinataire_reference")
+                        .HasFilter("reference IS NOT NULL");
 
                     b.ToTable("notifications", (string)null);
                 });

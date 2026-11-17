@@ -13,5 +13,7 @@ public enum NotificationType
     ConfirmationAbonnement,
     RappelRenouvellement,
     RenouvellementReussi,
-    RenouvellementEchoue
+    RenouvellementEchoue,
+    /// <summary>Late-payment recap sent to the bureau the day after a round's deadline.</summary>
+    RecapRetards
 }

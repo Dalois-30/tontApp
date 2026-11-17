@@ -78,6 +78,7 @@ public static class DependencyInjection
         services.AddScoped<RappelJ3Job>();
         services.AddScoped<RappelJ1Job>();
         services.AddScoped<RecapHebdoJob>();
+        services.AddScoped<RecapRetardsBureauJob>();
         services.AddScoped<RappelRenouvellementJ3Job>();
         services.AddScoped<RenouvellementAbonnementJob>();
 

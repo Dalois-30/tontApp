@@ -89,22 +89,6 @@ public sealed class TontineDbContext : DbContext, IUnitOfWork
 
                 OutboxMessages.Add(outboxMessage);
             }
-            else if (domainEvent is PaiementEnRetardEvent retardEvent)
-            {
-                var outboxMessage = OutboxMessage.Create(
-                    nameof(PaiementEnRetardEvent),
-                    JsonSerializer.Serialize(new
-                    {
-                        TontineId = retardEvent.TontineId.Value,
-                        TourId = retardEvent.TourId.Value,
-                        PayeurId = retardEvent.PayeurId.Value,
-                        retardEvent.Montant,
-                        retardEvent.Devise,
-                        retardEvent.OccurredOn
-                    }));
-
-                OutboxMessages.Add(outboxMessage);
-            }
             else if (domainEvent is NotificationCreatedEvent notificationCreatedEvent)
             {
                 var outboxMessage = OutboxMessage.Create(

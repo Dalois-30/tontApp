@@ -28,6 +28,26 @@ public interface INotificationService
         NotificationType type,
         string contenu,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Like <see cref="PlanifierNotificationAsync"/>, but at most once per (recipient, <paramref name="reference"/>),
+    /// ever: running again, or concurrently, plans nothing more (<see cref="ResultatPlanification.DejaPlanifiee"/>).
+    /// </summary>
+    Task<ResultatPlanification> PlanifierNotificationUniqueAsync(
+        string destinataireId,
+        NotificationType type,
+        string contenu,
+        string reference,
+        CancellationToken cancellationToken = default);
+}
+
+public enum ResultatPlanification
+{
+    Planifiee,
+    /// <summary>A notification with the same reference was already planned for this recipient.</summary>
+    DejaPlanifiee,
+    /// <summary>Not planned: no phone (no account), SMS opt-out, or daily quota reached.</summary>
+    NonPlanifiee,
 }
 
 public sealed class NotificationService : INotificationService
@@ -59,30 +79,46 @@ public sealed class NotificationService : INotificationService
         NotificationType type,
         string contenu,
         CancellationToken cancellationToken = default)
+        => await PlanifierAsync(destinataireId, type, contenu, null, cancellationToken) == ResultatPlanification.Planifiee;
+
+    public Task<ResultatPlanification> PlanifierNotificationUniqueAsync(
+        string destinataireId,
+        NotificationType type,
+        string contenu,
+        string reference,
+        CancellationToken cancellationToken = default)
+        => PlanifierAsync(destinataireId, type, contenu, reference, cancellationToken);
+
+    private async Task<ResultatPlanification> PlanifierAsync(
+        string destinataireId,
+        NotificationType type,
+        string contenu,
+        string? reference,
+        CancellationToken cancellationToken)
     {
         var (telephone, optOut) = await ResoudreDestinataireAsync(destinataireId, cancellationToken);
         if (telephone is null)
         {
             _logger.LogInformation("No phone number for recipient {DestinataireId}: notification {Type} skipped.", destinataireId, type);
-            return false;
+            return ResultatPlanification.NonPlanifiee;
         }
         destinataireId = telephone;
 
-        // Critical notifications (payment confirmations) bypass rate limits
+        // Critical notifications (payment confirmations) bypass opt-out and rate limits
         var notification = Notification.CreateFull(
             destinataireId,
             Canal.SMS,
             type,
             contenu);
 
-        if (!notification.EstCritique())
+        if (!notification.EstCritique() && optOut)
         {
-            if (optOut)
-            {
-                _logger.LogInformation("Recipient {DestinataireId} opted out of SMS: notification {Type} skipped.", destinataireId, type);
-                return false;
-            }
+            _logger.LogInformation("Recipient {DestinataireId} opted out of SMS: notification {Type} skipped.", destinataireId, type);
+            return ResultatPlanification.NonPlanifiee;
+        }
 
+        if (notification.SoumiseAuQuota())
+        {
             // Rate limit: max 10 SMS/member/day (non-critical only)
             var countToday = await _notificationRepository.CountTodayByDestinataireAsync(
                 destinataireId, cancellationToken);
@@ -92,18 +128,27 @@ public sealed class NotificationService : INotificationService
                 _logger.LogWarning(
                     "Rate limit reached for member {DestinataireId}: {Count} SMS sent today (max {Max}). Notification dropped.",
                     destinataireId, countToday, MaxSmsParJourParMembre);
-                return false;
+                return ResultatPlanification.NonPlanifiee;
             }
         }
 
-        await _notificationRepository.AddAsync(notification, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        if (reference is not null)
+        {
+            notification.DefinirReference(reference);
+            if (!await _notificationRepository.AjouterSiReferenceAbsenteAsync(notification, cancellationToken))
+                return ResultatPlanification.DejaPlanifiee;
+        }
+        else
+        {
+            await _notificationRepository.AddAsync(notification, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
 
         _logger.LogInformation(
             "Notification {NotificationId} planned for {DestinataireId} (type: {Type})",
             notification.Id, destinataireId, type);
 
-        return true;
+        return ResultatPlanification.Planifiee;
     }
 
     /// <summary>Phone number (E.164) and SMS opt-out flag of the recipient.</summary>

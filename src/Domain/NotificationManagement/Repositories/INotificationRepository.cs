@@ -14,4 +14,11 @@ public interface INotificationRepository
     /// Counts SMS notifications sent to a member today for rate limiting (max 10 SMS/member/day).
     /// </summary>
     Task<int> CountTodayByDestinataireAsync(string destinataireId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stores a notification that carries a <see cref="Notification.Reference"/> and saves it, unless one with
+    /// the same (recipient, reference) already exists — checked first, then enforced by the unique index, so
+    /// two concurrent callers store it only once. Returns false when it already existed.
+    /// </summary>
+    Task<bool> AjouterSiReferenceAbsenteAsync(Notification notification, CancellationToken cancellationToken = default);
 }
